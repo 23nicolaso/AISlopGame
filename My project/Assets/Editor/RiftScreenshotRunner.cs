@@ -133,7 +133,9 @@ public static class RiftScreenshotRunner
         Place(g.pilots[3], p.transform.position + p.transform.forward * 140 - p.transform.right * 40 + p.transform.up * 20, p.transform.rotation * Quaternion.Euler(-10, 25, 0));
         p.fireCooldown = 0;
         Check(g.Shoot(p, false, prey.transform), "player cannon fires for the combat frame");
-        foreach (var bolt in UnityEngine.Object.FindObjectsByType<ArenaBolt>(FindObjectsSortMode.None)) for (int i = 0; i < 6; i++) bolt.Tick(.02f);
+        // 3 steps of 0.02 s is ~26 m of travel: the tracer sits in open air between the two aircraft instead of inside the
+        // target, which is the only way a still frame can show that a shot is in flight (TrailRenderers need real frames).
+        foreach (var bolt in UnityEngine.Object.FindObjectsByType<ArenaBolt>(FindObjectsSortMode.None)) for (int i = 0; i < 3; i++) bolt.Tick(.02f);
         g.Feedback("medium", prey.transform.position, p);
         // Burst() spawns ArenaDebris cubes, not a ParticleSystem; tick them 0.16 s so the hit reads as a spray rather than a dot.
         foreach (var d in UnityEngine.Object.FindObjectsByType<ArenaDebris>(FindObjectsSortMode.None)) for (int i = 0; i < 8; i++) d.Tick(.02f);

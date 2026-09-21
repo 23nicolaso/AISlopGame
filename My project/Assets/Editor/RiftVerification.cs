@@ -170,8 +170,15 @@ public static class RiftVerification
             g.UpdateChaseCamera(.02f,p.transform.position,p.transform.rotation);
             float highStars=g.starMaterial.GetFloat("_Fade");
             Check(lowStars<.05f && highStars>.95f,"Stars fade in with altitude");
+            // Wind streaks are driven from the camera update, not Update(): 160 m/s in thick air emits, the same speed in vacuum does not.
+            p.transform.position=new Vector3(0,120,0);p.velocity=p.transform.forward*160;p.ResetRenderPose();
+            g.UpdateChaseCamera(.02f,p.transform.position,p.transform.rotation);
+            float lowRate=g.windStreaks.emission.rateOverTime.constant;
+            p.transform.position=new Vector3(0,5200,0);p.ResetRenderPose();
+            g.UpdateChaseCamera(.02f,p.transform.position,p.transform.rotation);
+            Check(lowRate>20 && g.windStreaks.emission.rateOverTime.constant<1,"Wind streaks scale with speed and air density");
 
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
         }
         finally
         {

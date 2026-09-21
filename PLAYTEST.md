@@ -32,6 +32,18 @@ Mouse flight sensitivity is intentionally reduced so small aiming corrections do
 
 Lift, drag, gravity, momentum, stall behavior, and thinner air affect flight. This is an assisted small-planet prototype with compressed distances, not an IL-2-level flight simulator or accurate orbital mechanics model.
 
+## Reading the arena
+
+The chase camera sits 14 m behind the aircraft (17 m on the burner) and the airframes are drawn 35% larger, so a rival at 60 m is a readable silhouette rather than a speck. Cannon tracers are thick enough to follow out to 100 m, and the engine plume stretches to two and a half times its length while the burner is lit — you can see a rival commit to a boost from directly astern.
+
+The sky is a real gradient now, not a flat colour: a warm haze band along the horizon that leans toward the sun, deep blue overhead, and the sun itself as a disc with a bloom halo. All of it thins out with altitude on the same curve the air does, so by roughly 700 m the sky has emptied into space. Stars work the other way: invisible below 150 m, fully out above 600 m. If you can see stars, your wings have almost nothing left to bite on.
+
+Three things exist purely so you can tell where you are and how fast you are going:
+
+- **Refinery beacons.** Every capture ring fires a 400 m light pillar straight up along the local vertical, in the ring's current owner colour. It is visible from about 2 km, which is far enough to pick your next refinery before you can resolve the ring itself.
+- **Ground furniture.** Rock spires (up to 70 m) and relay masts with lit tips are scattered within 350 m of every refinery. They have no collision — you cannot hit them — but at low level they are the only thing that tells you 150 m/s from 80 m/s. Cloud banks sit between 40 m and 110 m and are kept at least 400 m clear of every ring, so weather never hides a fight.
+- **Wind streaks.** Above 40 m/s the air starts showing streaks past the canopy, doubling on the burner and fading out as the atmosphere thins. In near-vacuum they stop entirely, which is the cue that your controls have gone soft.
+
 ## Verification
 
 While playing, use `Rift > Verify planetary arena` for deterministic checks of population, collection, banking, contest, cargo drops, score retention, player and rival respawning, pause behavior, swept hit detection, and neutral flight. The check resets pilot positions and changes temporary match state.

@@ -277,7 +277,8 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         scatterRoot=new GameObject("Arena / surface scatter").transform;scatterRoot.SetParent(world,false);
         // Its own rock material: the hull's dark (.025) turns every spire into a black cutout once the sun is low.
         var stone=new Material(Shader.Find("Universal Render Pipeline/Lit"));owned.Add(stone);
-        stone.SetColor("_BaseColor",new Color(.21f,.2f,.18f));stone.color=new Color(.21f,.2f,.18f);
+        // Bright enough that the ambient equator fill still colours the face turned away from a low sun instead of clipping to black.
+        stone.SetColor("_BaseColor",new Color(.36f,.33f,.29f));stone.color=new Color(.36f,.33f,.29f);
         stone.SetFloat("_Metallic",0);stone.SetFloat("_Smoothness",.12f);
         var rng=new System.Random(20260921);
         foreach(var gate in gates)
@@ -300,7 +301,7 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
                 }
                 else
                 {
-                    float height=15+(float)rng.NextDouble()*55,width=6+(float)rng.NextDouble()*12;
+                    float height=14+(float)rng.NextDouble()*56,width=5+(float)rng.NextDouble()*9;
                     var rock=Shape("Basalt spire",scatterRoot,PrimitiveType.Cube,at+localUp*height*.5f,new Vector3(width,height,width*.75f),i%3==0?slate:stone);
                     rock.transform.rotation=stand*Quaternion.Euler((float)rng.NextDouble()*10-5,0,(float)rng.NextDouble()*10-5);
                 }

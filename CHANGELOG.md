@@ -8,6 +8,14 @@
 
 ### Added
 
+- **程序化天空穹顶**（`IMPROVEMENT-PLAN.md` WP-A）：新 shader `Assets/Shaders/Sky.shader`（`Rift/Sky`）+ 半径 6000 的内翻球（`Cull Front`、`Queue=Background`、不写深度），每帧在 `UpdateChaseCamera`/`SnapCamera` 里被 `FollowSky()` 搬到相机位置，所以 14000 的远裁面永远切不到它。着色按三件事：地平线暖带（`lerp` 到 `(.55,.34,.16)`，权重 `pow(1-|h|,5)` 且按 `dot(ray,sun)²` 偏向太阳一侧）→ 天顶深蓝 `(.03,.115,.40)`；水平线以下按 `pow(-h,.5)` 迅速压暗成远地雾，不再是一片平光；整体用与 `Density()` 同款 280 m 标高的指数 `pow(saturate((air-.07)/.93),.4)` 随高度消散，700 m 以上完全变回近黑太空色。太阳是 HDR 6.0 的 `pow(dot(ray,_SunDir),1500)` 圆面加两段光晕（`pow(,40)*.55` + `pow(,8)*.10`），刚好压过 Volume 里 1.0 的 bloom 阈值。`cam.backgroundColor` 保留为 shader 缺失时的兜底。
+- **星空按高度淡入**：星网格从共用的 `white` 换成独立的加法材质（新 shader `Rift/Additive`），`_Fade` 由相机高度在 150 m→600 m 间线性驱动——白天（发射点 165 m）一颗星都没有，亚轨道满天。
+- **精炼环光柱**：每个 `CaptureGate` 在环顶上方立一根 5×400×5 的加法光柱（gate local +110..+510，沿径向上），颜色复用 `CaptureGate.Tick` 里既有的归属色 `MaterialPropertyBlock`（青=中立 / 蓝绿=玩家 / 橙=AI / 红=争夺 / 紫=超载 / 白闪=分红），2 km 外仍是一条清晰的竖线。材质初始色直接设成中立青，避免第一次 `Tick` 之前闪一帧白。
+- **云团化**：28 个单椭球换成 20 个由 5–7 个重叠扁球（半径 30–70 m，`(r, .4r, .78r)` 压扁并对齐当地径向）组成的云团，高度 40–110 m，共用一个零金属度、0.06 光滑度的 Lit 材质。确定性种子 1607，且拒绝任何离六个精炼环 <400 m 的位置（有校验覆盖）。
+- **地表散布物**：每个站点 30 个、共 180 个道具，落在环正下方地表 90–350 m 环带内并沿当地径向站立。4/5 是 14–70 m 高、5–14 m 宽的岩柱（专用 `(.36,.33,.29)` 岩石材质 + 随机 ±5° 倾斜），1/5 是 2×60×2 的中继塔加顶部 teal/red/gold 发光球。确定性种子 20260921。全部无碰撞——本作没有物理引擎，地表道具只是速度与尺度参照。
+- **风线粒子**：挂在相机下的 ParticleSystem（世界空间模拟、拉伸公告板、加法材质），在相机前方 19 m、半径 26 的球壳里生成，速度取 `-player.velocity`，发射率 = `Clamp01((Speed-40)/120) × (boost?2:1) × Density(相机高度) × 70`，全程由 `UpdateChaseCamera` 的 dt 驱动而不是 `Update`，所以真空里自动消失、暂停时随 `timeScale` 停住。
+- `RiftVerification`：六项新校验 —— 占领后光柱的 `_BaseColor` 等于环的归属色；`scatterRoot` 至少 150 个子物体；云团数量在 18–22 且每团离每个环都 >400 m；天空穹顶存在且 `UpdateChaseCamera` 后与相机位置重合；星空 `_Fade` 在 100 m 高度 <0.05、在 800 m >0.95；160 m/s 低空发射率 >20 而 5200 m 真空 <1。PASS 日志串加入 `beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate`。
+
 - **七个对手七种个性**（`MECHANICS-DESIGN.md` §7）：新 `ArenaPersonality` 只读表按 `id` 索引，字段 `aggression` / `bankAt` / `aimJitter` / `reaction` / `greed` / `revenge`。AI 里原先由 `id` 推导的常数（`id%3==0?720:470`、`cargo>=35`、`.4f+(id%5)*.1f`、cargo 权重 `1.5f`、`retaliation=9`）全部换成查表；`Shoot()` 里按 `aimJitter` 给非玩家的开火方向加 0.5°–3° 随机偏转。排行榜每个呼号右侧加 4 字标签（HUNT / HORD / VULT / STDY / AVNG / ROOK / ELIT）。
 - **易爆与装甲残骸**（§2、§10）：`SalvageCore` 加 `CoreKind{Normal,Volatile,Armored}` 与 `maxHealth`。每个站点 `c==2` 是 Volatile（紫色反应堆 + 分裂约束笼 + 破裂冷却阀，`weakPoint` 脉动加快一倍），摧毁时对 45 m 内所有存活 pilot（含开火者本人）造成 55 伤害、走 `Feedback("large")`、掉落 1.5× 货物；`s%3==0` 的站点 `c==3` 是 Armored（新增 `slate` 暗色装甲材质 + 四道装甲带），血量 200、机炮伤害 ×0.3、导弹全额（`Hit` 新增 `bool missile` 参数，`ArenaBolt` 传 `seeker`）、掉落 3× 货物。AI 选 `coreTarget` 时跳过 60 m 内的 Volatile（`greed>=2` 的秃鹫只留 25 m）。
 - **王牌连杀与悬赏**（§8）：`ArenaPilot.streak` + `AerialCombatPrototype.aceId`。`Kill()` 里受害者清零并让出悬赏，凶手连杀达 3 即成为 ACE。ACE 期间曳光与拖尾变金、在环里存分 ×1.5、排行榜标签变 "ACE"、屏幕顶部 `MatchClock` 下方出现脉动的 "BOUNTY <呼号>" 条（首次加冕有 1.35× 入场缩放）。所有 AI 的目标评分对 ACE 的 cargo 权重 ×2 并额外减 300 的平坦拉力，空手的 ACE 同样会被围攻。死亡即清除，`RestartMatch()` 一并重置。
@@ -33,6 +41,11 @@
 
 ### Changed
 
+- **视觉尺度**（WP-A）：追尾距离 20→14 m（boost 24→17），相机抬升同比例 5→3.5 m（`3.5/14` 与旧的 `5/20` 是同一个比值，所以机体在视口里的落点不动，30/60/144 fps 翻滚校验的 `x∈(.3,.7)`、`y∈(.1,.8)` 余量原样保留，实测最大相机角速度仍是 249 °/s）。每架飞机的 `art` 子物体 `localScale` ×1.35 —— 只动视觉节点，4 m / 9 m 的命中半径和 `Hull` 顶点数据一个没碰。
+- **太阳方位** `Euler(38,-28,0)` → `Euler(20,-148,0)`：仰角 20°、方位偏离发射航向约 18°，于是太阳圆面落在 66° 视场的右上（视口约 (0.64,0.81)）而不是相机背后，天空 shader 与平行光共用同一个 `-sun.forward` 向量。灯光颜色 (1,.9,.78)→(1,.88,.74) 配合低角度暖光，强度仍是 1.8（再高会让机体反照率越过 bloom 阈值）。
+- 机炮曳光加粗以便在 100 m 外仍可读：cube 截面 .22→.32，TrailRenderer `startWidth` .18→.3。
+- boost 尾焰在 `ArenaPilot.LateUpdate`（纯渲染侧）里沿 local z 在 1× 与 2.5× 之间缓动，加力状态从后方一眼可见。
+- `RiftScreenshotRunner` 的 05-combat 机位把子弹推进从 6 步 0.02 s 减到 3 步：曳光停在两机之间的空气里而不是钻进目标机身，静帧才看得出有子弹在飞。
 - 两个 `Rift*Verification` 都像固定 `paused` 一样固定 `phase=MatchPhase.Playing`，并在 `finally` 里恢复 —— 它们直接调用现在受比赛阶段门控的 `Damage` / `Shoot` / `Collect` / `Tick`。
 - **AI 与玩家共用同一条旋转通道**（`MECHANICS-DESIGN.md` §6a）：`Simulate()` 里去掉 `if(isPlayer)` 分支，`FlyTactics` 不再 `RotateTowards` 直接写 rotation，而是把目标姿态分解成 pitch / yaw / roll 三轴误差映射成 `controls`（-1..1），由共享的 `authority`/`rates`/`angularVelocity` 积分。AI 从此在稀薄空气和低速下同样转不动。地形预测拉起（`recovering`）保留 0.9 的 authority 下限和更快的舵面响应，属于生存反射而非缠斗优势。
 - `RiftCombatVerification` 的战斗测试从 1400 m 挪到 320 m（1400 m 空气密度只有 0.7%，统一飞行模型后那里量的是"双方都转不动"而非战斗能力）；命中窗口 650 步放宽到 1600 步，并让玩家每 5 s 补一枪维持交战；报复检查从 1 步放宽到 60 步以覆盖新的反应延迟。
