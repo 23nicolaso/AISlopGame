@@ -69,8 +69,19 @@ A snake on the shell of a junk-choked planet, in the same project and the same z
 ```bash
 "$UNITY" -batchmode -nographics -projectPath "$PROJECT" -executeMethod OrbitHeadlessRunner.Run -logFile /tmp/orbit-verify.log   # 24 rule checks
 "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -executeMethod RiftBuild.OrbitMacOS -logFile /tmp/orbit-build.log  # Builds/ORBIT.app
-"$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -executeMethod RiftBuild.OrbitWebGL -logFile /tmp/orbit-webgl.log  # Builds/ORBIT-web/ (itch.io)
+scripts/build-webgl.sh   # 24 checks -> RiftBuild.OrbitWebGL (edit-mode checks, Gzip + fallback, Itch template) -> scripts/check-webgl.mjs -> Builds/ORBIT-web/
 ```
+
+### Publishing to itch.io
+
+The release path is the one proven on [unity-flappybird](https://github.com/StevenLi-phoenix/unity_flappy_bird): `scripts/build-webgl.sh` builds and validates the bundle locally (`node --test scripts/*.test.mjs` covers the validator), and `.github/workflows/publish.yml` does the same on GitHub-hosted runners for every push to `main` (GameCI `unityci/editor:ubuntu-6000.6.1f1-webgl-3`, then official butler 15.31.0 pushes `Builds/ORBIT-web` to `stevenli-phoenix-work/orbit-snake:html` with the commit SHA as the version). The workflow needs four repository secrets, set by a repo admin and never pasted into chat or files in git: `UNITY_LICENSE`, `UNITY_EMAIL`, `UNITY_PASSWORD` (GameCI Personal-licence activation) and `BUTLER_API_KEY` (an itch.io API key with the `wharf` scope). Until they exist the workflow fails at its credential preflight with the missing name, and the manual path is:
+
+```bash
+butler push Builds/ORBIT-web stevenli-phoenix-work/orbit-snake:html --userversion <version>
+butler push Builds/ORBIT.app  stevenli-phoenix-work/orbit-snake:mac  --userversion <version>
+```
+
+Play it at <https://stevenli-phoenix-work.itch.io/orbit-snake>. Draft creation and a local build are not publication: check the public page runs and that `butler status` shows the version you meant.
 
 ## Tooling
 

@@ -8,7 +8,9 @@ using UnityEngine.Rendering.Universal;
 // is tinted by the rule that will decide the contact: green if the heading matches, red if not.
 public partial class OrbitSnake
 {
-    Material planetMat, hullMat, segMat, segMatAlt, junkCatch, junkStrike, wreckMat, fallMat, glowMat, exhaustMat, sparkMat, gridMat, starMat;
+    Material planetMat, hullMat, segMat, segMatAlt, junkNeutral, junkCatch, junkStrike, wreckMat, fallMat, glowMat, exhaustMat, sparkMat, gridMat, starMat;
+    // Layer 3 in TagManager is named Planet: the planet and clouds sit on it so the camera headlight can leave them alone.
+    const int PlanetLayer=3;
     Vector3 camPos, camUp; UniversalAdditionalCameraData camData;
     ParticleSystem sparks; Transform cloudLayer;
     public Vector3 sunDir=new Vector3(-.55f,.6f,-.58f).normalized;
@@ -20,17 +22,20 @@ public partial class OrbitSnake
 
     void BuildArt()
     {
-        planetMat=Mat(Color.white,false); planetMat.SetFloat("_Metallic",0); planetMat.SetFloat("_Smoothness",.2f); planetMat.SetTexture("_BaseMap",PlanetTexture());
+        // Low smoothness: at .2 the sun's specular on the ocean bloomed into a jagged white star from this height.
+        planetMat=Mat(Color.white,false); planetMat.SetFloat("_Metallic",0); planetMat.SetFloat("_Smoothness",.06f); planetMat.SetTexture("_BaseMap",PlanetTexture());
         hullMat=Mat(new Color(.96f,.97f,1f),false); segMat=Mat(new Color(.5f,.78f,1f),false); segMatAlt=Mat(new Color(.36f,.62f,.9f),false);
-        junkCatch=Mat(new Color(.25f,1.25f,.45f),true); junkStrike=Mat(new Color(1.35f,.22f,.18f),true); wreckMat=Mat(new Color(1.25f,.72f,.18f),true);
+        // Junk is lit, so the silhouettes keep their shading; the rule colour is a bright base tint, not a flat unlit fill.
+        junkNeutral=Mat(new Color(.62f,.66f,.72f),false); junkNeutral.SetFloat("_Metallic",.6f); junkNeutral.SetFloat("_Smoothness",.55f);
+        junkCatch=Mat(new Color(.3f,1.2f,.45f),false); junkStrike=Mat(new Color(1.3f,.25f,.2f),false); wreckMat=Mat(new Color(1.25f,.72f,.18f),false);
         fallMat=Mat(new Color(1.5f,.62f,.12f),true); glowMat=Mat(new Color(.45f,1.15f,1.5f),true); exhaustMat=Additive(new Color(.35f,.9f,1.3f),.9f); sparkMat=Additive(Color.white,1);
         gridMat=Mat(new Color(.26f,.32f,.44f),true); starMat=Additive(new Color(.75f,.8f,.95f),1);
         // Planet: a smooth lat-long sphere so the limb is round from 275 u up, lit by the sun so it has a terminator.
-        var planet=new GameObject("Planet"); planet.transform.SetParent(world,false);
+        var planet=new GameObject("Planet"); planet.transform.SetParent(world,false); planet.layer=PlanetLayer;
         planet.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius,128,64); planet.AddComponent<MeshRenderer>().sharedMaterial=planetMat;
         // Cloud layer: the same map's cloud channel on a slightly larger sphere, drifting slowly so the surface reads as alive.
         var cloudMat=Mat(Color.white,false); cloudMat.SetTexture("_BaseMap",CloudTexture()); cloudMat.SetFloat("_Surface",1); cloudMat.SetFloat("_Blend",0); cloudMat.SetOverrideTag("RenderType","Transparent"); cloudMat.renderQueue=3000; cloudMat.SetInt("_SrcBlend",(int)BlendMode.SrcAlpha); cloudMat.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha); cloudMat.SetInt("_ZWrite",0); cloudMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); cloudMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-        var clouds=new GameObject("Clouds"); clouds.transform.SetParent(world,false); clouds.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius+2.5f,96,48); clouds.AddComponent<MeshRenderer>().sharedMaterial=cloudMat; cloudLayer=clouds.transform;
+        var clouds=new GameObject("Clouds"); clouds.transform.SetParent(world,false); clouds.layer=PlanetLayer; clouds.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius+2.5f,96,48); clouds.AddComponent<MeshRenderer>().sharedMaterial=cloudMat; cloudLayer=clouds.transform;
         // Grid every 15 degrees, faint: from straight above it is what shows speed over an ocean.
         for(int i=0;i<23;i++){ var ring=new GameObject("Grid").AddComponent<LineRenderer>(); ring.transform.SetParent(world,false); ring.useWorldSpace=true; ring.loop=true; ring.positionCount=128; ring.widthMultiplier=.3f; ring.sharedMaterial=gridMat;
             bool lon=i<12; var q=lon?Quaternion.AngleAxis(i*15,Vector3.up)*Quaternion.AngleAxis(90,Vector3.right):Quaternion.identity; float lat=(i-12)*15-75; float r=lon?PlanetRadius+3.2f:Mathf.Cos(lat*Mathf.Deg2Rad)*(PlanetRadius+3.2f); float y=lon?0:Mathf.Sin(lat*Mathf.Deg2Rad)*(PlanetRadius+3.2f);
@@ -42,7 +47,9 @@ public partial class OrbitSnake
         var stars=new GameObject("Stars"); stars.transform.SetParent(world,false); var sr=new System.Random(3);
         for(int i=0;i<700;i++){ float z=(float)sr.NextDouble()*2-1,a=(float)sr.NextDouble()*Mathf.PI*2,r=Mathf.Sqrt(1-z*z); Shape("Star",stars.transform,PrimitiveType.Cube,new Vector3(r*Mathf.Cos(a),z,r*Mathf.Sin(a))*1500,Vector3.one*(1.5f+(float)sr.NextDouble()*3.5f),starMat); }
         var sun=new GameObject("Sun").AddComponent<Light>(); sun.transform.SetParent(world); sun.type=LightType.Directional; sun.intensity=2.6f; sun.color=new Color(1,.95f,.86f); sun.transform.rotation=Quaternion.LookRotation(-sunDir);
-        RenderSettings.ambientMode=AmbientMode.Trilight; RenderSettings.ambientSkyColor=new Color(.3f,.36f,.5f); RenderSettings.ambientEquatorColor=new Color(.2f,.24f,.34f); RenderSettings.ambientGroundColor=new Color(.12f,.14f,.2f); RenderSettings.skybox=null; RenderSettings.fog=false;
+        // Ambient is high enough that the night side of the planet still shows its continents; the headlight on the camera
+        // (BuildCamera) keeps the ship and junk readable there, so the sun only has to draw the terminator.
+        RenderSettings.ambientMode=AmbientMode.Trilight; RenderSettings.ambientSkyColor=new Color(.42f,.48f,.62f); RenderSettings.ambientEquatorColor=new Color(.28f,.32f,.44f); RenderSettings.ambientGroundColor=new Color(.16f,.18f,.26f); RenderSettings.skybox=null; RenderSettings.fog=false;
         // Post-processing: a runtime global volume with bloom for the HDR emissives and a soft vignette.
         var volume=new GameObject("Post").AddComponent<Volume>(); volume.transform.SetParent(world,false); volume.isGlobal=true; var profile=ScriptableObject.CreateInstance<VolumeProfile>(); owned.Add(profile); volume.profile=profile;
         var bloom=profile.Add<Bloom>(true); bloom.threshold.Override(1f); bloom.intensity.Override(.7f); bloom.scatter.Override(.6f);
@@ -108,7 +115,7 @@ public partial class OrbitSnake
     // Every renderer is listed so the catch/strike tint covers the whole object.
     public void BuildJunkArt(OrbitJunk j)
     {
-        var m=j.wreck?wreckMat:junkStrike; var list=new System.Collections.Generic.List<Renderer>();
+        var m=j.wreck?wreckMat:junkNeutral; var list=new System.Collections.Generic.List<Renderer>();
         void Part(string n,PrimitiveType t,Vector3 p,Vector3 sc,Vector3 rot){ var g=Shape(n,j.transform,t,p,sc,m); g.transform.localRotation=Quaternion.Euler(rot); list.Add(g.GetComponent<Renderer>()); }
         if(j.wreck){ Part("Body",PrimitiveType.Cube,Vector3.zero,new Vector3(3.6f,3.2f,4.6f),Vector3.zero); Part("Band",PrimitiveType.Cube,Vector3.zero,new Vector3(4f,3.6f,1.2f),Vector3.zero); }
         else switch(Mathf.Abs((int)(j.phase*1000))%3)
@@ -130,9 +137,10 @@ public partial class OrbitSnake
     }
 
     // Junk within reach is tinted by the rule that will decide the contact: green if the heading matches, red if not.
+    // Out of reach it is neutral metal, so the colour means "this one, now" rather than painting the whole sky red.
     public void TintJunk()
     {
-        foreach(var j in junk){ if(j.tint==null||j.shot)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:(near&&Vector3.Angle(ship.tangent,j.Direction)<CatchAngleNow?junkCatch:junkStrike); if(j.body&&j.body.sharedMaterial!=m)foreach(var r in j.tint)if(r)r.sharedMaterial=m; }
+        foreach(var j in junk){ if(j.tint==null||j.shot)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:!near?junkNeutral:(Vector3.Angle(ship.tangent,j.Direction)<CatchAngleNow?junkCatch:junkStrike); if(j.body&&j.body.sharedMaterial!=m)foreach(var r in j.tint)if(r)r.sharedMaterial=m; }
         if(cloudLayer)cloudLayer.Rotate(0,Time.deltaTime*.4f,0,Space.World);
     }
 
@@ -142,6 +150,10 @@ public partial class OrbitSnake
         cam.clearFlags=CameraClearFlags.SolidColor; cam.backgroundColor=new Color(.008f,.01f,.025f); cam.fieldOfView=62; cam.nearClipPlane=1; cam.farClipPlane=3200; cam.allowHDR=true;
         camData=cam.GetUniversalAdditionalCameraData(); camData.renderPostProcessing=true; camData.antialiasing=AntialiasingMode.SubpixelMorphologicalAntiAliasing;
         cam.gameObject.AddComponent<AudioListener>();
+        // Headlight: a directional fill riding on the camera, tilted off its axis so cube faces still grade, masked off the
+        // planet layer so the terminator stays. Dimmer than the sun, so URP keeps the sun as the main light.
+        var head=new GameObject("Headlight").AddComponent<Light>(); head.transform.SetParent(cam.transform,false); head.transform.localRotation=Quaternion.Euler(-28,22,0);
+        head.type=LightType.Directional; head.intensity=1.4f; head.color=new Color(.85f,.92f,1f); head.cullingMask=~(1<<PlanetLayer);
     }
     // Top-down, rigid: the camera sits above the head looking straight down the normal, no lag, no shake, so the ship is
     // pinned to the screen centre and only the world moves. Screen-up is a tangent vector parallel-transported along the

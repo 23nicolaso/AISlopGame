@@ -62,23 +62,40 @@ public static class RiftBuild
     }
 
     // Orbit Snake WebGL player for itch.io: <repo>/Builds/ORBIT-web/ (index.html at the root, zip the folder as-is).
-    // itch.io serves .br/.gz files without a Content-Encoding header, so the build ships uncompressed; the canvas is
-    // 1280x720, the HUD's virtual resolution. productName is only borrowed for the page title and put back afterwards.
+    // Same recipe as unity-flappybird's BuildGame.BuildWebGL, which is verified on itch.io: explicit WebGL 2, Gzip with the
+    // decompression fallback (itch serves .gz without a Content-Encoding header), the project's Itch template that fills
+    // the iframe and lets Unity match the canvas size. Edit-mode checks run first and the log ends with
+    // BUILD_AND_TESTS_PASSED, which scripts/build-webgl.sh and the publish workflow grep for. productName is only
+    // borrowed for the page title and put back afterwards.
+    static void Check(bool condition, string name) { if (!condition) throw new Exception("FAIL: " + name); Debug.Log("PASS: " + name); }
     [MenuItem("Orbit/Build WebGL player")]
     public static void OrbitWebGL()
     {
         EnsureShaderAssets(); OrbitSceneBuilder.Ensure();
         string product = PlayerSettings.productName; bool bg = PlayerSettings.runInBackground;
-        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled; PlayerSettings.WebGL.decompressionFallback = false;
-        PlayerSettings.WebGL.template = "APPLICATION:Default"; PlayerSettings.defaultWebScreenWidth = 1280; PlayerSettings.defaultWebScreenHeight = 720;
+        PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.WebGL, false);
+        PlayerSettings.SetGraphicsAPIs(BuildTarget.WebGL, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3 });
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip; PlayerSettings.WebGL.decompressionFallback = true;
+        PlayerSettings.WebGL.template = "PROJECT:Itch"; PlayerSettings.defaultWebScreenWidth = 1280; PlayerSettings.defaultWebScreenHeight = 720;
         PlayerSettings.productName = "ORBIT SNAKE"; PlayerSettings.runInBackground = true;
+        var playerSettings = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/ProjectSettings.asset")[0]);
+        Check(playerSettings.FindProperty("activeInputHandler").intValue == 1, "only the new Input System is enabled");
+        // This project assigns URP per quality level (the URP template leaves the graphics-settings default empty), so
+        // each level must resolve to a URP asset either on its own or through the default.
+        for (int i = 0; i < QualitySettings.names.Length; i++)
+            Check((QualitySettings.GetRenderPipelineAssetAt(i) ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline) is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset, "URP quality level: " + QualitySettings.names[i]);
+        Check(PlayerSettings.WebGL.decompressionFallback, "WebGL works without custom HTTP compression headers");
+        Check(File.Exists("Assets/WebGLTemplates/Itch/index.html"), "responsive WebGL template exists");
+        Check(File.Exists(OrbitSceneBuilder.ScenePath), "Orbit Snake scene exists");
+        Check(File.Exists("Assets/Resources/RiftShaders/UniversalRenderPipeline_Lit.mat"), "runtime shaders are anchored for the player build");
         string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../Builds/ORBIT-web"));
         Directory.CreateDirectory(output);
         try
         {
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { OrbitSceneBuilder.ScenePath }, locationPathName = output, target = BuildTarget.WebGL, options = BuildOptions.None });
             Debug.Log("[BUILD] " + report.summary.result + " -> " + output + " (" + report.summary.totalSize / (1024 * 1024) + " MB, " + report.summary.totalErrors + " errors)");
-            if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
+            if (report.summary.result != BuildResult.Succeeded) throw new Exception("Build failed");
+            Debug.Log("BUILD_AND_TESTS_PASSED");
         }
         finally { PlayerSettings.productName = product; PlayerSettings.runInBackground = bg; AssetDatabase.SaveAssets(); }
     }

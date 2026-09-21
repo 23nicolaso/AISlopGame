@@ -23,6 +23,7 @@ This file provides guidance to AI coding agents (Claude Code, Codex, etc.) when 
   - `Rift > Verify flip stability and rival combat` → `Assets/Editor/RiftCombatVerification.cs`：30/60/144fps 下相机翻滚无极点跳变、boost 相机缓动、AI 交战/报复、真实弹道命中、重生保护/冷却/星球遮挡、地形预测拉起。`RiftCombatVerification.Run()` 是 public static 返回字符串，可被 MCP 之类外部调用。
   - 两者失败即抛 `Exception("... CHECK FAILED: ...")`，成功 `Debug.Log("... PASS ...")`；跑完会 `Spawn` 所有 pilot 重置局面。**改了模拟逻辑后必须两个都跑一遍。**
 - **截图辅助**：`Rift > Stage atmosphere screenshot` / `Stage suborbital screenshot` 摆好机位并 `EditorApplication.isPaused=true`，`Rift > Return to launch` 恢复。截图实际存放在 `Assets/Screenshots/`（`PLAYTEST.md` 里写的 `My project/Captures` 目录并不存在）。
+- **Orbit Snake WebGL / itch.io**（与 `unity-flappybird` 同一套）：`scripts/build-webgl.sh` = 24 项校验 → `RiftBuild.OrbitWebGL`（编辑模式检查 + Gzip/回退 + `Assets/WebGLTemplates/Itch` 模板，日志末尾 `BUILD_AND_TESTS_PASSED`）→ `node scripts/check-webgl.mjs Builds/ORBIT-web`；`node --test scripts/*.test.mjs` 测校验器。`.github/workflows/publish.yml` 在 main 上用 GameCI 构建并以 butler 推 `stevenli-phoenix-work/orbit-snake:html`（需 `UNITY_LICENSE`/`UNITY_EMAIL`/`UNITY_PASSWORD`/`BUTLER_API_KEY` 四个 secret，由仓库 admin 设置）。本地构建成功、草稿创建、上传成功、公开页面能玩，是四个要分别验证的状态。
 - **Unity MCP**：`Packages/manifest.json` 里依赖 `com.coplaydev.unity-mcp`（git main），Editor 内 `Window → MCP for Unity` 起 HTTP 服务 `http://localhost:8080/mcp`。`.codex/config.toml` 是 Codex 的项目级 MCP 配置——若想把它导入 Claude Code，让用户回复 `/import` 扫描，再 `/import --yes=<digest>` 应用；不要手工读写。
 
 ## 代码架构

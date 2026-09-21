@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{{ PRODUCT_NAME }}}</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#02040a}
+    #unity-canvas{display:block;width:100%;height:100%;outline:none;touch-action:none}
+    #loading{position:fixed;inset:0;display:grid;place-content:center;gap:18px;text-align:center;font:600 18px system-ui;color:#9fb4d8;background:#02040a;transition:opacity .25s}
+    #ring{width:64px;height:64px;margin:0 auto;border-radius:50%;border:3px solid #24334d;border-top-color:#8fd3ff;animation:spin 1.1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    progress{width:220px;accent-color:#8fd3ff}#error{max-width:28em;padding:24px}
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="0" aria-label="Orbit Snake game"></canvas>
+  <div id="loading"><div id="ring"></div><progress id="progress" max="1" value="0"></progress><div id="error" hidden></div></div>
+  <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+  <script>
+    const canvas=document.getElementById('unity-canvas');
+    const loading=document.getElementById('loading');
+    createUnityInstance(canvas,{
+      dataUrl:"Build/{{{ DATA_FILENAME }}}",
+      frameworkUrl:"Build/{{{ FRAMEWORK_FILENAME }}}",
+      codeUrl:"Build/{{{ CODE_FILENAME }}}",
+      streamingAssetsUrl:"StreamingAssets",
+      companyName:{{{ JSON.stringify(COMPANY_NAME) }}},
+      productName:{{{ JSON.stringify(PRODUCT_NAME) }}},
+      productVersion:{{{ JSON.stringify(PRODUCT_VERSION) }}},
+      matchWebGLToCanvasSize:true,
+      devicePixelRatio:Math.min(window.devicePixelRatio||1,2)
+    },value=>document.getElementById('progress').value=value).then(()=>{
+      loading.style.opacity='0';loading.style.pointerEvents='none';
+      setTimeout(()=>loading.remove(),250);canvas.focus();
+      console.info('ORBIT_WEBGL_READY');
+    }).catch(error=>{
+      console.error('ORBIT_WEBGL_LOAD_FAILED',error);
+      const message=document.getElementById('error');message.hidden=false;
+      message.textContent='Unable to load the game. Please reload and try again.';
+    });
+    canvas.addEventListener('pointerdown',()=>canvas.focus());
+  </script>
+</body>
+</html>

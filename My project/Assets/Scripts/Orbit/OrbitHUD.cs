@@ -49,10 +49,12 @@ public partial class OrbitSnake
         // The current shell's arc drifts from blue to orange as the Kessler clock runs, and blinks when a piece is added.
         Color load=Color.Lerp(Lit,new Color(1,.55f,.2f),KesslerLoad); if(kesslerPulse>0)load=Color.Lerp(load,Color.white,kesslerPulse);
         for(int i=0;i<ShellAltitude.Length;i++){ bool lit=i<=level; Color c=lit?(i==level?(ejectPulse>0?Color.Lerp(Lit,Color.white,Pulse(3)):load):Lit):Dim; Arc(sc,20+i*9,135,270,4,c); }
-        // Score, digits only, top right.
-        Digits(new Rect(Width-330,26,300,60),score);
+        // Score, digits only, top right. On the web the itch.io page floats its own buttons over the top-right
+        // ~110 px of the embed, so the score drops below them there and stays in the corner everywhere else.
+        float st=Application.platform==RuntimePlatform.WebGLPlayer?110:0;
+        Digits(new Rect(Width-330,26+st,300,60),score);
         // Best score, small and dim under the score; gold and breathing when this run beat it.
-        if(best>0){ var bs=new GUIStyle(small); if(newBest)bs.normal.textColor=Color.Lerp(new Color(1,.85f,.3f),Color.white,Pulse(1.2f)); Digits(new Rect(Width-330,74,300,30),best,bs); }
+        if(best>0){ var bs=new GUIStyle(small); if(newBest)bs.normal.textColor=Color.Lerp(new Color(1,.85f,.3f),Color.white,Pulse(1.2f)); Digits(new Rect(Width-330,74+st,300,30),best,bs); }
         // Train pips against the quota, bottom centre. Filled pips are the segments held; past the quota they turn gold.
         int q=Quota; int n=ship.segments.Count; int slots=Mathf.Max(q,n); float pw=22,gap=8; float x0=Width*.5f-(slots*pw+(slots-1)*gap)*.5f;
         for(int i=0;i<slots;i++){ bool filled=i<n; bool extra=i>=q; Color c=!filled?Dim:extra?new Color(1,.85f,.3f):(EjectReady?Color.Lerp(Ready,Color.white,Pulse(1.5f)*.5f):Lit); Box(new Rect(x0+i*(pw+gap),Height-64,pw,pw),c); if(!filled)Box(new Rect(x0+i*(pw+gap)+3,Height-61,pw-6,pw-6),new Color(0,0,0,.35f)); }
