@@ -84,7 +84,7 @@ public partial class AerialCombatPrototype
         foreach(var p in pilots)
         {
             p.score=0;p.cargo=0;p.kills=0;p.deaths=0;p.streak=0;
-            p.shotsFired=0;p.combatShotsFired=0;p.hitsLanded=0;p.biggestBank=0;
+            p.shotsFired=0;p.combatShotsFired=0;p.hitsLanded=0;p.biggestBank=0;p.chainCount=0;p.chainTimer=0;
             Spawn(p,true);
         }
         foreach(var gate in gates){gate.owner=-1;gate.claimant=-1;gate.progress=0;gate.ownerAge=0;gate.payoutFlash=0;gate.overcharge=0;}

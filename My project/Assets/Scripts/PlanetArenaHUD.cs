@@ -525,6 +525,15 @@ public partial class AerialCombatPrototype
             GUI.color=new Color(1,.84f,.35f,.6f+pulse*.4f);
             Text(new Rect(598,Height-94,60,20),"HEAVY",small);GUI.color=Color.white;
         }
+        // Chain readout sits between CARGO and the seeker strip, with a bar that drains over the 3 s window.
+        if(player.chainTimer>0 && player.chainCount>1)
+        {
+            float k=player.chainTimer/ArenaPilot.ChainWindow;
+            GUI.color=new Color(1,.84f,.35f,.6f+.4f*k);
+            Text(new Rect(600,Height-70,80,18),"CHAIN  x"+player.ChainMultiplier.ToString("0.##"),small);
+            Box(new Rect(602,Height-52,60,3),new Color(.3f,.25f,.12f));Box(new Rect(602,Height-52,60*k,3),new Color(1,.74f,.18f));
+            GUI.color=Color.white;
+        }
         float bankScale=Pop(bankPop);
         if(bankPop>0)GUI.matrix=beforePop*Matrix4x4.TRS(new Vector3(499,Height-52,0),Quaternion.identity,new Vector3(bankScale,bankScale,1))*Matrix4x4.Translate(new Vector3(-499,-(Height-52),0));
         Text(new Rect(495,Height-64,180,24),"BANKED "+player.score,small);

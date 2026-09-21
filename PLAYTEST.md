@@ -96,6 +96,10 @@ The scope at bottom right is the aircraft's own frame at 14 m per pixel: refiner
 
 Under the title block a single OBJECTIVE line walks a new pilot through the loop once: shoot a reactor, fly into what it spills, take it to a ring, hold inside the ring. Each step pops as it clears and a bank from any step ends it with LOOP CLOSED / NOW GO HUNTING. It never shows again on the same machine. The results screen closes every match with four awards under the standings — Top Gun, Big Deposit, Ironclad and Marksman — so a match that was lost on banked score can still have been won somewhere.
 
+## Chains and heists
+
+Salvage picked up within three seconds of the last piece climbs a multiplier — x1.25, x1.5, x1.75, x2 from the fifth piece on — shown as a gold CHAIN readout beside CARGO with a bar draining over the window. A tight sweep through a spill is worth more than circling back for stragglers, and rivals get the same rule. Taking a refinery off a rival who is still alive pays a HEIST bonus of 15 on top of the claim, and the pilot who lost it is told who took it.
+
 ## Vendetta
 
 Whoever shoots you down is marked for sixty seconds: their rankings tag turns red and reads VNDT, a red ring breathes around their aircraft with the seconds left under it, and the feed says VENDETTA and their callsign. Take them down inside the window and whatever they were carrying is paid a second time straight into your banked score, twenty at the least, with a VENDETTA SETTLED line. Somebody else getting there first, or the clock running out, quietly clears it. It is one grudge at a time and it is the only rival the HUD ever tells you to want, so redeploying always comes with a target already chosen.

@@ -17,6 +17,10 @@ public partial class ArenaPilot : MonoBehaviour
     public const float LockTime=1.2f;
     public int autopilot=-1;
     bool trailsDirty;
+    // Salvage chain: pickups inside ChainWindow of each other climb a multiplier (x1, x1.25 ... x2 from the fifth on).
+    public int chainCount; public float chainTimer;
+    public const float ChainWindow=3;
+    public float ChainMultiplier => 1+.25f*Mathf.Min(4,Mathf.Max(0,chainCount-1));
     float burnBank;
     // Decays on simulation dt, not wall clock, so rivals hearing gunfire stays deterministic under the verification harness.
     public float firedRecently;
@@ -72,7 +76,7 @@ public partial class ArenaPilot : MonoBehaviour
     {
         angularVelocity=Vector3.zero;controls=Vector3.zero;boost=false;
         fireCooldown=0;seekerCooldown=0;decision=0;firedRecently=0;recovering=false;
-        lockTarget=null;lockTimer=0;
+        lockTarget=null;lockTimer=0;chainCount=0;chainTimer=0;
         hullHeat=0;burnBank=0;
         coreTarget=null;shardTarget=null;gateTarget=null;rivalTarget=null;
         ResetTactics();ResetRenderPose();
@@ -104,6 +108,7 @@ public partial class ArenaPilot : MonoBehaviour
         fireCooldown=Mathf.Max(0,fireCooldown-dt);
         seekerCooldown=Mathf.Max(0,seekerCooldown-dt);
         heat=Mathf.Max(0,heat-dt*.22f);
+        if(chainTimer>0){chainTimer=Mathf.Max(0,chainTimer-dt);if(chainTimer<=0)chainCount=0;}
         firedRecently=Mathf.Max(0,firedRecently-dt);
         // autopilot>=0 hands the player's airframe to a rival personality: the balance harness flies whole matches with it.
         if(!isPlayer || autopilot>=0) Think(dt);
@@ -311,7 +316,15 @@ public class CaptureGate : MonoBehaviour
             {
                 if(owner!=occupant.id)
                 {
+                    // Heist: taking a ring off a living rival pays a premium on top of the claim, and the loser hears about it.
+                    int previous=owner;
                     owner=occupant.id; ownerAge=0; occupant.score+=25;
+                    if(previous>=0 && previous!=occupant.id && previous<g.pilots.Count && g.pilots[previous].Alive)
+                    {
+                        occupant.score+=AerialCombatPrototype.HeistBonus;
+                        if(occupant==g.player)g.Toast("HEIST  +"+AerialCombatPrototype.HeistBonus+"  FROM "+g.pilots[previous].callsign.ToUpper(),new Color(1,.8f,.28f));
+                        else if(previous==g.player.id)g.Toast("REFINERY "+(index+1)+"  TAKEN BY "+occupant.callsign.ToUpper(),new Color(1,.42f,.3f));
+                    }
                     g.Toast("REFINERY "+(index+1)+"  CLAIMED  +25",occupant==g.player?new Color(.16f,1,.85f):new Color(1,.45f,.18f));
                     // Three rising notes beside the toast. A rival taking a ring across the planet is still board news,
                     // so it chimes too, at a third of the volume: you hear the map change without being shouted at.

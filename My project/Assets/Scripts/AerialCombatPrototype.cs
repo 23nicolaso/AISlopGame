@@ -23,6 +23,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     // window banks their spilled cargo again as a flat bonus (at least VendettaFloor). One personal fight per death.
     public int vendettaId=-1; public float vendettaTimer;
     public const float VendettaWindow=60; public const int VendettaFloor=20;
+    public const int HeistBonus=15;
     // Onboarding: one objective line that walks a new pilot through the loop once (shoot, scoop, ring, hold), then
     // never again on this machine. Advanced on the match clock from the flags the game already raises.
     public int tutorialStep; public float tutorialPop; public bool playerHitWreck, playerBanked;
@@ -433,7 +434,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
         Vector3 at=s.transform.position;
         // Salvage taken above the coast line is worth double, judged on the collector's own altitude rather than the
         // shard's: shards drift to whoever is nearest, so the only honest question is who has to fly it back down.
-        s.claimed=true; p.cargo+=p.Altitude>550?s.value*2:s.value; shards.Remove(s); Destroy(s.gameObject);
+        // Chain: a pickup inside 3 s of the last one climbs the multiplier, so a tight sweep through a spill pays more
+        // than circling back for the stragglers. Applied after the altitude doubling; every pilot gets it.
+        p.chainCount=p.chainTimer>0?p.chainCount+1:1;p.chainTimer=ArenaPilot.ChainWindow;
+        s.claimed=true; p.cargo+=Mathf.RoundToInt((p.Altitude>550?s.value*2:s.value)*p.ChainMultiplier); shards.Remove(s); Destroy(s.gameObject);
         if(p==player) cargoPop=.18f;
         Feedback("small",at,p,collectSound);
     }
