@@ -275,7 +275,8 @@ public partial class ArenaPilot
         // Dive limiter: gravity already supplies the descent in thin air, so the nose never points more than ~17 degrees
         // below the horizon on the way to a lower target. Telemetry had rivals arriving at 240 m with 85 m/s of sink.
         float down=Vector3.Dot(direction,up);
-        float steepest=Altitude>800?-.85f:-.3f;
+        // 37 degrees above 800 m (was 58): a powered 58 degree dive from 1400 m in no drag arrived at 500 m doing 250 m/s.
+        float steepest=Altitude>800?-.6f:-.3f;
         if(!recover && down<steepest)direction=(Vector3.ProjectOnPlane(direction,up).normalized*Mathf.Sqrt(1-steepest*steepest)+up*steepest).normalized;
         Vector3 safeUp=Vector3.ProjectOnPlane(up,direction);
         if(safeUp.sqrMagnitude<.01f)safeUp=Vector3.ProjectOnPlane(transform.up,direction);
@@ -312,7 +313,10 @@ public partial class ArenaPilot
             // Not while intercepting: a replay of the projectile check showed the rule pushing the nose down on a climbing
             // gun pass at a target 120 m above, so the aim never closed inside 14 degrees. Fights need the vertical.
             float zoom=climb>0?climb*climb/(2*AerialCombatPrototype.Gravity(transform.position)):0;
-            if(!rivalTarget && zoom>Mathf.Max(0,AerialCombatPrototype.Altitude(navigation)-Altitude)+40)pitchError=Mathf.Min(pitchError,-12);
+            // Nothing is chased above 560 m, rival or not: a launched rival dragged its pursuers up with it (every launch
+            // in round 14 began as a Search or Intercept climbing after a contact that was already above the air).
+            float ceilingAlt=Mathf.Min(AerialCombatPrototype.Altitude(navigation),560);
+            if((!rivalTarget || AerialCombatPrototype.Altitude(navigation)>560) && zoom>Mathf.Max(0,ceilingAlt-Altitude)+40)pitchError=Mathf.Min(pitchError,-12);
         }
         // Degrees of error that already demand full deflection; a pull-up commits harder than a dogfight correction.
         float gain=recover?12:22;
@@ -334,7 +338,7 @@ public partial class ArenaPilot
         // Above the air the engine is the ONLY control: an unconditional cut past 800 m left laden pilots pointing
         // straight at their ring while coasting away from it for a minute (bank sampler, zero stick, growing range).
         // So: off while climbing or with the nose above the horizon, otherwise .7 to push the nose-down line home.
-        else if(!recover && !rivalTarget && Altitude>650)throttle=(climb>10 || noseElevation>-3)?0:.7f;
+        else if(!recover && !rivalTarget && Altitude>650)throttle=(climb>10 || noseElevation>-3 || descent>40)?0:.7f;
         else if(!recover && !rivalTarget && climb>15 && Altitude>AerialCombatPrototype.Altitude(navigation)+60)throttle=0;
         boost=fuel>.25f && ((recover && Altitude<350 && descent>0 && (Speed<80 || descent>45)) || (Altitude>280 && Altitude<650 && descent>35 && !rivalTarget));
 
