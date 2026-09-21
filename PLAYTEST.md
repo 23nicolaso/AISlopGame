@@ -121,7 +121,8 @@ A standalone player builds headlessly too, and it is the quickest way to fly a m
 "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -executeMethod RiftBuild.MacOS -logFile /tmp/rift-build.log
 open Builds/RIFT.app
 # Full-frame screenshot with the HUD (the Editor renders cannot include IMGUI): plays 4.5 s, captures, quits.
-Builds/RIFT.app/Contents/MacOS/RIFT -rift-screenshot=/tmp/rift-hud.png
+"Builds/RIFT.app/Contents/MacOS/My project" -screen-fullscreen 0 -screen-width 1600 -screen-height 900 -rift-screenshot=/tmp/rift-hud.png
+# Attribute a visual by elimination: -rift-hide=trails,wind,plume hides those on the player's airframe for the capture.
 ```
 
 Both verification suites and the screenshots also run without anyone at the keyboard. With the Editor closed:

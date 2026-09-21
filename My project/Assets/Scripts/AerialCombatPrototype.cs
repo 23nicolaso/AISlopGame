@@ -30,7 +30,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     // Results-screen awards, computed once when the match ends.
     public readonly List<string> awards=new List<string>();
     // Standalone player only: -rift-screenshot=<png> captures the full frame with the HUD 4.5 s in, then quits a second later.
-    string screenshotPath; float quitAt;
+    string screenshotPath,hideForCapture=""; float quitAt;
     public const int AceStreak=3;
     public Camera cam;
     public UniversalAdditionalCameraData camData;
@@ -102,7 +102,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         Application.runInBackground=true;
         LoadComfort();
         tutorialStep=PlayerPrefs.GetInt("rift.loopClosed",0)>0?4:0;
-        foreach(var arg in System.Environment.GetCommandLineArgs())if(arg.StartsWith("-rift-screenshot="))screenshotPath=arg.Substring(17);
+        foreach(var arg in System.Environment.GetCommandLineArgs()){if(arg.StartsWith("-rift-screenshot="))screenshotPath=arg.Substring(17);if(arg.StartsWith("-rift-hide="))hideForCapture=arg.Substring(11);}
         foreach(var c in FindObjectsByType<Camera>()) c.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>()) a.enabled=false;
         foreach(var l in FindObjectsByType<Light>()) l.enabled=false;
@@ -647,6 +647,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
         float dt=Time.deltaTime; elapsed+=dt; MatchTick(dt);
         if(screenshotPath!=null && elapsed>4.5f)
         {
+            // -rift-hide=trails,wind,plume: an A/B switch for reading a capture, so a visual can be attributed by elimination.
+            if(hideForCapture.Contains("trails"))foreach(var t in player.GetComponentsInChildren<TrailRenderer>()){t.emitting=false;t.Clear();}
+            if(hideForCapture.Contains("wind") && windStreaks){windStreaks.Stop();windStreaks.Clear();}
+            if(hideForCapture.Contains("plume"))foreach(var t in player.GetComponentsInChildren<Transform>())if(t.name=="Exhaust")t.gameObject.SetActive(false);
             ScreenCapture.CaptureScreenshot(screenshotPath);screenshotPath=null;quitAt=elapsed+1;
         }
         if(quitAt>0 && elapsed>quitAt)Application.Quit();

@@ -65,9 +65,10 @@ Transform BuildShip(Transform parent,bool enemy)
             Hull(art,"Engine nacelle",new Vector3(side*1.2f,-.1f,-.8f),new Vector3(.45f,.7f,.65f),dark);
             Shape("Engine aperture",art,PrimitiveType.Sphere,new Vector3(side*1.2f,-.1f,-2.1f),new Vector3(.43f,.32f,.12f),enemy?red:teal);
             var plume=Shape("Exhaust",art,PrimitiveType.Sphere,new Vector3(side*1.2f,-.1f,-2.8f),new Vector3(.22f,.18f,1.5f),enemy?red:teal);
-            // The player's own trail ends before it reaches the chase camera 14 m astern: a 0.35 s trail at 95 m/s is 33 m
-            // long and was passing under the lens as two fat lines to the bottom of the frame (built-player capture).
-            var trail=plume.AddComponent<TrailRenderer>(); trail.sharedMaterial=enemy?red:teal; trail.time=enemy?.35f:.12f; trail.startWidth=.16f; trail.endWidth=0; trail.minVertexDistance=.3f;
+            // The player's own trail is 0.05 s (~5 m): anything longer runs back toward the chase camera 14 m astern and
+            // projects as two fat lines to the bottom of the frame — an A/B capture with the trails hidden proved it.
+            // Rivals keep 0.35 s, which is what makes them trackable at 600 m.
+            var trail=plume.AddComponent<TrailRenderer>(); trail.sharedMaterial=enemy?red:teal; trail.time=enemy?.35f:.05f; trail.startWidth=enemy?.16f:.1f; trail.endWidth=0; trail.minVertexDistance=.3f;
             Shape("Wing identification",art,PrimitiveType.Cube,new Vector3(side*2,.04f,-.7f),new Vector3(.7f,.05f,.16f),enemy?red:gold);
             var fin=Shape("Canted stabilizer",art,PrimitiveType.Cube,new Vector3(side*.65f,.6f,-1.2f),new Vector3(.1f,1,.8f),enemy?dark:alloy);
             fin.transform.localRotation=Quaternion.Euler(0,0,side*-25);
