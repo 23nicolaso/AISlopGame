@@ -108,6 +108,7 @@
 
 ### Fixed
 
+- **独立播放器在 `Awake` 里直接崩溃**（第一次无头构建就暴露）：全部材质都是运行时 `Shader.Find` 建的，而播放器构建会剥离任何没有资源引用的 shader，于是 `new Material(null)` 抛 `ArgumentNullException: shader`——这个游戏在此之前从来没能以独立播放器的形式运行过。修法：`RiftBuild.EnsureShaderAssets()` 在 `Assets/Resources/RiftShaders/` 为六个 shader（URP Lit / Unlit、Rift/PlanetSurface / Atmosphere / Sky / Additive）各生成一个锚点材质并提交进仓库，构建就带上它们的默认变体（运行时没有用任何 keyword，默认变体足够）。
 - **AI 会永久放弃报复且一枪不开**（`c5f2956`）。校验项 "Returns fire on attacker despite carrying cargo" 在批次 2/3 之后一直失败，实机逐帧打点后发现是四个叠加的 bug 而非单纯转向慢：① `gateTarget` 在 tactic / 导航 / 油门三处都压过正在进行的交战，且决策块里 `else if(gateTarget)rivalTarget=null;` 会在 `retaliation` 归零那一帧清掉一个正在拉近的合法目标，之后不再重新扫描 —— 现在报复或 Alert 期间根本不计算 `gateTarget`，并删掉了那行强制清空；② Search 状态飞的是随自身位置漂移的方位角，改成记住并飞向 `lastKnownPosition` 绝对坐标（`NotifyAttacked` / 丢失接触 / 听见枪声三处写入）；③ 近距离脱离机动与开火共用同一门槛，贴脸那一帧被脱离拦住 —— 开火判定挪到脱离触发之前，且 `rivalTarget` 为空时 `breakTime=0`；④ 开火锥角 `<7°` 在共享飞行模型下弯道追击只能收敛到恰好 7.0°，放宽到 `<9°`。`RiftCombatVerification` 的报复窗口从 60 步放宽到 550 步（11 s），注释说明正后方受击的最坏几何需要 9–10 s 才能重新咬住。
 - `PLAYTEST.md` 里截图目录写成不存在的 `My project/Captures`，实际目录是 `docs/screenshots/`（由 `RiftScreenshotRunner` 生成）与历史的 `My project/Assets/Screenshots/`。
 
