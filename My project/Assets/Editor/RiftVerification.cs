@@ -11,6 +11,8 @@ public static class RiftVerification
         var g=AerialCombatPrototype.I;
         Check(EditorApplication.isPlaying && g!=null,"Enter Play Mode");
         bool wasPaused=g.paused;g.paused=false;
+        // This harness calls Damage/Shoot/Collect/Tick directly, so it has to own the match phase for the duration.
+        var oldPhase=g.phase;float oldPhaseTimer=g.phaseTimer;g.phase=MatchPhase.Playing;g.phaseTimer=0;
         var p=g.player;int oldScore=p.score;
         try
         {
@@ -55,12 +57,50 @@ public static class RiftVerification
             float minAlt=99999,maxSpeed=0;
             for(int i=0;i<500;i++){p.Simulate(.02f);minAlt=Mathf.Min(minAlt,p.Altitude);maxSpeed=Mathf.Max(maxSpeed,p.Speed);}
             Check(p.Alive && minAlt>15 && maxSpeed<250,"Ten seconds of neutral flight stays airborne");
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight. Neutral altitude="+p.Altitude.ToString("F1")+" speed="+p.Speed.ToString("F1"));
+
+            // Holding a refinery is an income stream: 12 s of uncontested ownership is worth 5 banked points, once.
+            var income=g.gates[1];
+            foreach(var other in g.pilots)other.transform.position=income.transform.position+Vector3.right*4000;
+            income.owner=0;income.claimant=-1;income.progress=0;income.ownerAge=11.9f;
+            int banked=p.score;income.Tick(.2f);
+            Check(p.score==banked+5 && income.ownerAge<.15f,"Held refinery pays banked income every 12 s");
+            income.Tick(2);
+            Check(p.score==banked+5,"Refinery income does not pay twice inside one cycle");
+            income.owner=-1;income.claimant=-1;income.progress=0;income.ownerAge=0;
+
+            // Ended must silence the scoring verbs exactly the way pause silences damage.
+            g.Spawn(p);p.invulnerable=0;p.cargo=0;p.fireCooldown=0;p.heat=0;
+            g.phase=MatchPhase.Ended;
+            float endHealth=p.health;g.Damage(p,40,bot);
+            Check(p.health==endHealth,"Ended blocks damage");
+            Check(!g.Shoot(p),"Ended blocks the cannon");
+            g.SpawnShard(p.transform.position,5);
+            var stale=g.shards[g.shards.Count-1];g.Collect(p,stale);
+            Check(p.cargo==0 && !stale.claimed,"Ended blocks salvage pickup");
+
+            p.score=77;p.cargo=9;p.kills=3;p.deaths=2;g.gates[0].owner=0;
+            g.RestartMatch();
+            bool fresh=g.phase==MatchPhase.Countdown && g.gates[0].owner==-1 && g.shards.Count==0;
+            foreach(var pilot in g.pilots)fresh&=pilot.score==0 && pilot.cargo==0 && pilot.kills==0 && pilot.deaths==0 && pilot.Alive;
+            Check(fresh,"Restart returns every pilot and gate to a fresh countdown");
+            g.phase=MatchPhase.Playing;g.phaseTimer=0;
+
+            // Cargo weight: identical launch state, five seconds each; the full hold must end lower and slower.
+            g.Spawn(p);p.controls=Vector3.zero;
+            Vector3 launch=p.transform.position;Quaternion heading=p.transform.rotation;Vector3 motion=p.velocity;
+            for(int i=0;i<250;i++)p.Simulate(.02f);
+            float lightAltitude=p.Altitude,lightSpeed=p.Speed;
+            g.Spawn(p);p.controls=Vector3.zero;
+            p.transform.position=launch;p.transform.rotation=heading;p.velocity=motion;p.cargo=150;
+            for(int i=0;i<250;i++)p.Simulate(.02f);
+            Check(p.Altitude<lightAltitude-5 && p.Speed<lightSpeed-1,"Full cargo hold flies heavier and slower");
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+p.Altitude.ToString("F1")+" laden speed="+p.Speed.ToString("F1"));
         }
         finally
         {
             p.score=oldScore;
             foreach(var pilot in g.pilots)g.Spawn(pilot);
+            g.phase=oldPhase;g.phaseTimer=oldPhaseTimer;
             g.paused=wasPaused;g.SnapCamera();
         }
     }

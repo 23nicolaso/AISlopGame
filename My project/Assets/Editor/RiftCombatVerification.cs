@@ -26,6 +26,8 @@ public static class RiftCombatVerification
         var g=AerialCombatPrototype.I;
         Check(EditorApplication.isPlaying && g,"Enter Play Mode");
         bool paused=g.paused;g.paused=false;
+        // Damage and Shoot only resolve while the match is live, so the harness pins the phase like it pins pause.
+        var oldPhase=g.phase;float oldPhaseTimer=g.phaseTimer;g.phase=MatchPhase.Playing;g.phaseTimer=0;
         var p=g.player;var bot=g.pilots[1];float maxCameraRate=0;
         int initialShots=bot.combatShotsFired,initialHits=bot.hitsLanded;
         try
@@ -107,6 +109,7 @@ public static class RiftCombatVerification
         finally
         {
             ClearBolts();foreach(var pilot in g.pilots)g.Spawn(pilot);
+            g.phase=oldPhase;g.phaseTimer=oldPhaseTimer;
             g.paused=paused;g.SnapCamera();
         }
     }
