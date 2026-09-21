@@ -29,6 +29,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public static readonly string[] Objectives={"SHOOT A REACTOR ON A WRECK","FLY INTO THE SALVAGE IT SPILLS","TAKE IT TO A REFINERY RING","HOLD INSIDE THE RING","LOOP CLOSED   /   NOW GO HUNTING"};
     // Results-screen awards, computed once when the match ends.
     public readonly List<string> awards=new List<string>();
+    // Standalone player only: -rift-screenshot=<png> captures the full frame with the HUD 4.5 s in, then quits a second later.
+    string screenshotPath; float quitAt;
     public const int AceStreak=3;
     public Camera cam;
     public UniversalAdditionalCameraData camData;
@@ -100,6 +102,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         Application.runInBackground=true;
         LoadComfort();
         tutorialStep=PlayerPrefs.GetInt("rift.loopClosed",0)>0?4:0;
+        foreach(var arg in System.Environment.GetCommandLineArgs())if(arg.StartsWith("-rift-screenshot="))screenshotPath=arg.Substring(17);
         foreach(var c in FindObjectsByType<Camera>()) c.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>()) a.enabled=false;
         foreach(var l in FindObjectsByType<Light>()) l.enabled=false;
@@ -642,6 +645,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
             TickAudio(0); return;
         }
         float dt=Time.deltaTime; elapsed+=dt; MatchTick(dt);
+        if(screenshotPath!=null && elapsed>4.5f){ScreenCapture.CaptureScreenshot(screenshotPath);screenshotPath=null;quitAt=elapsed+1;}
+        if(quitAt>0 && elapsed>quitAt)Application.Quit();
         if(k!=null && phase==MatchPhase.Ended && k.enterKey.wasPressedThisFrame) RestartMatch();
         hitFlash=Mathf.Max(0,hitFlash-dt); damageFlash=Mathf.Max(0,damageFlash-dt);
         // Purely visual timers run on unscaled time so hit-stop does not stretch a banner or a hit wedge.

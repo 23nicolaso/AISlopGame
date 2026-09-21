@@ -115,6 +115,15 @@ While playing, use `Rift > Verify planetary arena` for deterministic checks of p
 
 The atmosphere/suborbital screenshot menu entries stage and pause the camera; `Rift > Return to launch` resumes. Hand-taken screenshots live in `My project/Assets/Screenshots/`.
 
+A standalone player builds headlessly too, and it is the quickest way to fly a match:
+
+```bash
+"$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -executeMethod RiftBuild.MacOS -logFile /tmp/rift-build.log
+open Builds/RIFT.app
+# Full-frame screenshot with the HUD (the Editor renders cannot include IMGUI): plays 4.5 s, captures, quits.
+Builds/RIFT.app/Contents/MacOS/RIFT -rift-screenshot=/tmp/rift-hud.png
+```
+
 Both verification suites and the screenshots also run without anyone at the keyboard. With the Editor closed:
 
 ```bash

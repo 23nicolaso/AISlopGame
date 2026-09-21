@@ -14,6 +14,8 @@ Everything in the arena — the planet, sky, sun, moon, clouds, ships, wrecks, r
 1. Open `My project` in Unity Hub (6000.6.1f1) and let Package Manager resolve dependencies.
 2. Open `Assets/Scenes/SampleScene.unity` and press Play. The arena builds itself; no menu.
 
+Or skip the Editor: `"$UNITY" -batchmode -nographics -quit -projectPath "My project" -executeMethod RiftBuild.MacOS` writes `Builds/RIFT.app`, and `open Builds/RIFT.app` flies.
+
 | Input | Action |
 | --- | --- |
 | Mouse | Pitch / bank (small tethered circle shows stick deflection) |
