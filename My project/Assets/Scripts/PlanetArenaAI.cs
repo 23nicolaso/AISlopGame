@@ -128,7 +128,10 @@ public partial class ArenaPilot
                         continue;
                     }
                     if(d>reach)continue;
-                    float rating=d-Mathf.Min(other.cargo,100)*Profile.greed;
+                    // The whole field converges on the bounty without any scripted rubber band: double greed on what the ace
+                    // is carrying, plus a flat pull so an ace who just banked is still worth more than a fat bystander.
+                    bool bounty=arena.aceId==other.id;
+                    float rating=d-Mathf.Min(other.cargo,100)*Profile.greed*(bounty?2:1)-(bounty?300:0);
                     if(rating<best){best=rating;rivalTarget=other;}
                 }
                 if(rivalTarget){engagement=8+id*.4f;alertTarget=null;alertTimer=0;}

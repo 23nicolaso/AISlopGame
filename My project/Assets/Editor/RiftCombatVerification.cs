@@ -104,11 +104,49 @@ public static class RiftCombatVerification
             float minimum=bot.Altitude;
             for(int i=0;i<300;i++){bot.Simulate(.02f);minimum=Mathf.Min(minimum,bot.Altitude);}
             Check(bot.deaths==deaths && minimum>4,"Predictive terrain recovery prevents crash");
-            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1");
+
+            SalvageCore armored=null,unstable=null;
+            foreach(var c in g.cores)
+            {
+                if(!armored && c.kind==CoreKind.Armored)armored=c;
+                if(!unstable && c.kind==CoreKind.Volatile)unstable=c;
+            }
+            Check(armored && unstable,"Arena seeds armored and volatile wrecks");
+            // Armored belts price the seeker: identical 100 damage lands as 30 from the cannon and 100 from a missile.
+            armored.cooldown=0;armored.health=armored.maxHealth;
+            armored.Hit(100,p,false);float afterCannon=armored.maxHealth-armored.health;
+            armored.health=armored.maxHealth;
+            armored.Hit(100,p,true);float afterMissile=armored.maxHealth-armored.health;
+            Check(armored.maxHealth>=200 && Mathf.Abs(afterCannon-30)<.01f && Mathf.Abs(afterMissile-100)<.01f,"Armored wreck discounts cannon fire but not missiles");
+            armored.health=armored.maxHealth;
+
+            // Volatile detonation is a radius weapon: 45 m in takes the full 55, a rival watching from 300 m takes nothing.
+            Vector3 blastUp=AerialCombatPrototype.Up(unstable.transform.position);
+            foreach(var other in g.pilots)Place(other,unstable.transform.position+blastUp*900,Quaternion.identity);
+            Place(p,unstable.transform.position+blastUp*30,Quaternion.identity);
+            Place(bot,unstable.transform.position+blastUp*300,Quaternion.identity);
+            unstable.cooldown=0;unstable.health=unstable.maxHealth;
+            unstable.Hit(unstable.maxHealth,bot,false);
+            Check(!unstable.Available,"Volatile wreck breaks up");
+            Check(Mathf.Abs(p.health-(100-SalvageCore.BlastDamage))<.01f,"Volatile detonation damages pilots inside 45 m");
+            Check(Mathf.Abs(bot.health-100)<.01f,"Volatile detonation spares pilots outside the blast");
+
+            // Three unanswered kills crowns an ace; dying hands the mark back to nobody.
+            g.aceId=-1;foreach(var pilot in g.pilots){pilot.streak=0;pilot.cargo=0;}
+            for(int i=2;i<=4;i++){var prey=g.pilots[i];prey.health=100;prey.invulnerable=0;g.Kill(prey,bot);}
+            Check(g.aceId==bot.id && bot.streak>=AerialCombatPrototype.AceStreak,"Three kills crowns an ace");
+            bot.health=100;bot.invulnerable=0;g.Kill(bot,g.pilots[5]);
+            Check(g.aceId==-1 && bot.streak==0,"Killing the ace clears the bounty");
+
+            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; ace bounty crowning and clearing. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1");
         }
         finally
         {
-            ClearBolts();foreach(var pilot in g.pilots)g.Spawn(pilot);
+            ClearBolts();foreach(var pilot in g.pilots){pilot.streak=0;g.Spawn(pilot);}
+            g.aceId=-1;g.bountyFresh=0;
+            foreach(var core in g.cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}
+            for(int i=g.shards.Count-1;i>=0;i--)if(g.shards[i])UnityEngine.Object.DestroyImmediate(g.shards[i].gameObject);
+            g.shards.Clear();
             g.phase=oldPhase;g.phaseTimer=oldPhaseTimer;
             g.paused=paused;g.SnapCamera();
         }

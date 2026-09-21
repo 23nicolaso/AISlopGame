@@ -3,7 +3,7 @@ using UnityEngine;
 
 public partial class AerialCombatPrototype
 {
-    GUIStyle small,normal,title,right,banner,clock,count,centered,rightBig,tag;
+    GUIStyle small,normal,title,right,banner,clock,count,centered,rightBig,tag,bounty;
     bool stylesReady;
     readonly List<ArenaPilot> standings=new List<ArenaPilot>();
     float standingsRefresh;
@@ -21,6 +21,7 @@ public partial class AerialCombatPrototype
         centered=new GUIStyle(small){alignment=TextAnchor.MiddleCenter};
         rightBig=new GUIStyle(normal){alignment=TextAnchor.MiddleRight};
         tag=new GUIStyle(small){fontSize=10,alignment=TextAnchor.MiddleRight};
+        bounty=new GUIStyle(banner){fontSize=17};
         stylesReady=true;
     }
     // Chevron on a ring around the crosshair; the bearing is taken in camera space so it points where the eye looks.
@@ -63,6 +64,34 @@ public partial class AerialCombatPrototype
         GUI.color=new Color(.63f,.83f,.9f,.7f);
         Text(new Rect(Width*.5f-96,52,192,16),phase==MatchPhase.Ended?"MATCH OVER":"REMAINING",centered);
         GUI.color=Color.white;
+    }
+    // Sits directly under the match clock, between the title block and the rankings, so it never covers either.
+    void BountyStrip()
+    {
+        if(aceId<0 || aceId>=pilots.Count)return;
+        var ace=pilots[aceId];
+        float pulse=.5f+.5f*Mathf.Sin(Time.unscaledTime*4.2f);
+        // A crowning punches in wide and settles, so the strip is impossible to miss the moment it is earned.
+        float entrance=Mathf.Clamp01(bountyFresh/1.1f),scale=1+entrance*entrance*.35f;
+        string label="BOUNTY   "+ace.callsign.ToUpper();
+        float w=Mathf.Max(236,label.Length*11+72),h=30;
+        Color edge=new Color(1,.74f,.18f,.45f+pulse*.55f);
+        Matrix4x4 old=GUI.matrix;
+        GUI.matrix=old*Matrix4x4.TRS(new Vector3(Width*.5f,80+h*.5f,0),Quaternion.identity,new Vector3(scale,scale,1));
+        Rect r=new Rect(-w*.5f,-h*.5f,w,h);
+        Box(r,new Color(.13f,.07f,.01f,.5f+pulse*.18f+entrance*.3f));
+        Line(new Vector2(r.x,r.y),new Vector2(r.xMax,r.y),edge,2);
+        Line(new Vector2(r.x,r.yMax),new Vector2(r.xMax,r.yMax),new Color(1,.74f,.18f,.22f+pulse*.3f),1);
+        // Brackets on both ends: the same shape as the target reticle, aimed at a callsign.
+        for(int side=-1;side<=1;side+=2)
+        {
+            float x=side<0?r.x-9:r.xMax+9;
+            Line(new Vector2(x-side*7,r.y+3),new Vector2(x,r.y+h*.5f),edge);
+            Line(new Vector2(x,r.y+h*.5f),new Vector2(x-side*7,r.yMax-3),edge);
+        }
+        GUI.color=Color.Lerp(new Color(1,.79f,.32f),Color.white,pulse*.45f);
+        Text(r,label,bounty);
+        GUI.color=Color.white;GUI.matrix=old;
     }
     void CountdownCard()
     {
@@ -163,6 +192,7 @@ public partial class AerialCombatPrototype
         Text(new Rect(34,24,220,36),"R I F T",title);
         Text(new Rect(35,60,220,23),player.Altitude>550?"SUBORBITAL COAST":"ATMOSPHERIC FLIGHT",small);
         MatchClock();
+        BountyStrip();
 
         if(Time.unscaledTime>standingsRefresh || standings.Count==0)
         {
@@ -178,8 +208,9 @@ public partial class AerialCombatPrototype
             GUI.color=p.Alive?Color.white:new Color(.5f,.5f,.5f);
             Text(new Rect(1027,y,118,22),(i+1)+". "+p.callsign,small);
             // A four-letter disposition beside every callsign: by the second match the player knows who to hunt and who to avoid.
-            GUI.color=p.Alive?new Color(.45f,.66f,.76f):new Color(.36f,.4f,.44f);
-            Text(new Rect(1139,y+2,46,20),ArenaPersonality.For(p.id).tag,tag);
+            bool marked=p.id==aceId;
+            GUI.color=marked?new Color(1,.8f,.28f):p.Alive?new Color(.45f,.66f,.76f):new Color(.36f,.4f,.44f);
+            Text(new Rect(1139,y+2,46,20),marked?"ACE":ArenaPersonality.For(p.id).tag,tag);
             GUI.color=p.Alive?Color.white:new Color(.5f,.5f,.5f);
             Text(new Rect(1188,y,54,22),p.score.ToString(),right);GUI.color=Color.white;
         }

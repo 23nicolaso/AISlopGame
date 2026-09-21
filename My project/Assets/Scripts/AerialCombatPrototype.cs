@@ -14,11 +14,15 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public readonly List<SalvageShard> shards = new List<SalvageShard>();
     public readonly List<CaptureGate> gates = new List<CaptureGate>();
     public ArenaPilot player;
+    // Whoever is on a three-kill run. The whole field weights its target scoring toward this id, so the leader
+    // gets hunted without any explicit difficulty dial, and a trailing pilot gets a way back in by taking the mark.
+    public int aceId=-1;
+    public const int AceStreak=3;
     public Camera cam;
     public UniversalAdditionalCameraData camData;
     public bool paused;
     // shake is trauma: callers only ever add to it, decay is linear, and the camera uses its square.
-    public float elapsed, hitFlash, damageFlash, shake, hitStop, bannerTimer, lastAttackAge;
+    public float elapsed, hitFlash, damageFlash, shake, hitStop, bannerTimer, lastAttackAge, bountyFresh;
     public string bannerText="";
     public Vector3 lastAttackDirection;
     public Transform world;
@@ -186,7 +190,14 @@ public partial class AerialCombatPrototype : MonoBehaviour
         if(!victim.Alive) return;
         int spoils=victim.cargo,cargo=spoils; victim.cargo=0; victim.health=0; victim.respawn=3;
         victim.art.gameObject.SetActive(false); victim.deaths++;
-        if(attacker && attacker!=victim) attacker.kills++;
+        // Dying always surrenders the run, so the bounty is cleared before the killer's own streak is counted.
+        victim.streak=0; if(aceId==victim.id) aceId=-1;
+        if(attacker && attacker!=victim)
+        {
+            attacker.kills++; attacker.streak++;
+            // The crowning gets its own HUD entrance rather than a banner: the kill banner below is the louder, more urgent read.
+            if(attacker.streak>=AceStreak && aceId!=attacker.id){aceId=attacker.id;bountyFresh=1.1f;}
+        }
         int pieces=Mathf.Min(16,Mathf.CeilToInt(cargo/8f));
         for(int i=0;i<pieces;i++)
         {
@@ -307,10 +318,12 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // firing solution passes its angle gate so a jittery pilot still shoots, it just does not shoot straight.
         float jitter=p.isPlayer?0:p.Profile.aimJitter;
         if(jitter>0)direction=Quaternion.AngleAxis(Random.Range(-jitter,jitter),Random.onUnitSphere)*direction;
-        var g=Shape(seeker?"Seeker":"Cannon tracer",world,PrimitiveType.Cube,p.transform.position+p.transform.forward*5, new Vector3(.22f,.22f,seeker?2.5f:5),p.isPlayer?teal:red);
+        // Gold tracer marks the bounty from the receiving end too: you can tell who is shooting at you before you turn around.
+        Material tracer=p.id==aceId?gold:p.isPlayer?teal:red;
+        var g=Shape(seeker?"Seeker":"Cannon tracer",world,PrimitiveType.Cube,p.transform.position+p.transform.forward*5, new Vector3(.22f,.22f,seeker?2.5f:5),tracer);
         var bolt=g.AddComponent<ArenaBolt>(); bolt.owner=p; bolt.velocity=direction*(seeker?170:360)+p.velocity;
         bolt.target=target; bolt.seeker=seeker;
-        var t=g.AddComponent<TrailRenderer>(); t.sharedMaterial=p.isPlayer?teal:red; t.time=seeker?.6f:.1f; t.startWidth=seeker?.35f:.18f; t.endWidth=0;
+        var t=g.AddComponent<TrailRenderer>(); t.sharedMaterial=tracer; t.time=seeker?.6f:.1f; t.startWidth=seeker?.35f:.18f; t.endWidth=0;
         p.firedRecently=1.5f;
         // Per-shot recoil trauma is small: at 8 shots/s it settles near .2 trauma, which squares down to a faint buzz.
         if(p==player){audioSource.PlayOneShot(gunSound,.4f); Trauma(.03f);}
@@ -362,6 +375,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // Purely visual timers run on unscaled time so hit-stop does not stretch a banner or a hit wedge.
         float raw=Time.unscaledDeltaTime;
         bannerTimer=Mathf.Max(0,bannerTimer-raw); lastAttackAge=Mathf.Max(0,lastAttackAge-raw);
+        bountyFresh=Mathf.Max(0,bountyFresh-raw);
         if(k!=null && player.Alive && Application.isFocused)
         {
             player.throttle=Mathf.Clamp01(player.throttle+((k.leftShiftKey.isPressed?1:0)-(k.leftCtrlKey.isPressed?1:0))*dt*.35f);

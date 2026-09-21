@@ -98,8 +98,8 @@ public static class RiftVerification
         }
         finally
         {
-            p.score=oldScore;
-            foreach(var pilot in g.pilots)g.Spawn(pilot);
+            p.score=oldScore;g.aceId=-1;
+            foreach(var pilot in g.pilots){pilot.streak=0;g.Spawn(pilot);}
             g.phase=oldPhase;g.phaseTimer=oldPhaseTimer;
             g.paused=wasPaused;g.SnapCamera();
         }

@@ -2,7 +2,7 @@ using UnityEngine;
 
 public partial class ArenaPilot : MonoBehaviour
 {
-    public int id, score, cargo, kills, deaths, generation;
+    public int id, score, cargo, kills, deaths, generation, streak;
     public string callsign;
     public bool isPlayer, boost;
     public Transform art;
@@ -218,7 +218,8 @@ public class CaptureGate : MonoBehaviour
                 {
                     owner=occupant.id; ownerAge=0; occupant.score+=25;
                 }
-                if(occupant.cargo>0){occupant.score+=occupant.cargo;occupant.cargo=0;}
+                // The ace refines at a premium: the mark is worth holding onto, which is what makes hunting it worth the risk.
+                if(occupant.cargo>0){occupant.score+=g.aceId==occupant.id?Mathf.RoundToInt(occupant.cargo*1.5f):occupant.cargo;occupant.cargo=0;}
                 occupant.health=Mathf.Min(100,occupant.health+dt*10);
             }
         }

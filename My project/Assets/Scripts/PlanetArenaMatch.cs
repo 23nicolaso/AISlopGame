@@ -37,7 +37,7 @@ public partial class AerialCombatPrototype
     {
         foreach(var p in pilots)
         {
-            p.score=0;p.cargo=0;p.kills=0;p.deaths=0;
+            p.score=0;p.cargo=0;p.kills=0;p.deaths=0;p.streak=0;
             p.shotsFired=0;p.combatShotsFired=0;p.hitsLanded=0;
             Spawn(p,true);
         }
@@ -46,7 +46,7 @@ public partial class AerialCombatPrototype
         for(int i=shards.Count-1;i>=0;i--) if(shards[i]) Destroy(shards[i].gameObject);
         shards.Clear();
         foreach(var core in cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}
-        elapsed=0;bannerTimer=0;damageFlash=0;lastAttackAge=0;shake=0;
+        elapsed=0;bannerTimer=0;damageFlash=0;lastAttackAge=0;shake=0;aceId=-1;bountyFresh=0;
         phase=MatchPhase.Countdown;phaseTimer=0;heartbeatMark=-1;
     }
 }
