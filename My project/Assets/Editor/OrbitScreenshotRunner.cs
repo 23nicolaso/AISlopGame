@@ -43,7 +43,7 @@ public static class OrbitScreenshotRunner
         // 3. Eject: the train falling away below as the ship lifts.
         g.Eject(); for(int i=0;i<30;i++)g.Step(.02f); g.SnapCamera(); g.TintJunk(); Capture("03-eject");
         // 4. Skills on offer: three icons ahead on the new shell, the ship 20 u short of them.
-        for(int i=0;i<25;i++)g.Step(.02f); g.SnapCamera(); g.TintJunk(); Capture("04-skills");
+        for(int i=0;i<20;i++)g.Step(.02f); g.SnapCamera(); g.TintJunk(); Capture("04-skills");
         g.Restart(7); Debug.Log("[SHOT] PASS: 4 frames written to "+outDir);
     }
 

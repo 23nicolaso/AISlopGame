@@ -121,7 +121,7 @@ public partial class OrbitSnake : MonoBehaviour
     // take it; the other two vanish. Nothing is written anywhere: the icon is the offer.
     public void OfferSkills()
     {
-        foreach(var p in skillPods)Destroy(p.gameObject); skillPods.Clear();
+        foreach(var p in skillPods)Kill(p.gameObject); skillPods.Clear();
         var pool=new List<int>(); for(int i=0;i<SkillCount;i++)if(!skills[i])pool.Add(i);
         int count=Mathf.Min(3,pool.Count); float r=ShellRadius(level);
         for(int k=0;k<count;k++)
@@ -135,10 +135,12 @@ public partial class OrbitSnake : MonoBehaviour
     public void Take(SkillPod pod)
     {
         skills[(int)pod.skill]=true; if(pod.skill==Skill.Armour)armour=1; pickPulse=.8f; score+=25; Chime(4);
-        foreach(var p in skillPods)Destroy(p.gameObject); skillPods.Clear(); Toast("SKILL "+pod.skill);
+        foreach(var p in skillPods)Kill(p.gameObject); skillPods.Clear(); Toast("SKILL "+pod.skill);
     }
 
     public void Toast(string s){toast=s;toastTimer=4f;feed.Add(s);if(feed.Count>6)feed.RemoveAt(0);}
+    // Destroy is deferred to the end of the frame; hiding first keeps a spent object out of any capture taken this frame.
+    public static void Kill(GameObject g){ if(!g)return; g.SetActive(false); Destroy(g); }
 
     void FixedUpdate(){ Advance(Time.fixedDeltaTime); }
     // The pause gate. Step() itself is unconditional so the checks can drive it while the game is paused.
@@ -150,7 +152,7 @@ public partial class OrbitSnake : MonoBehaviour
         elapsed+=dt; ship.Simulate(dt);
         foreach(var j in junk)j.Tick(dt);
         foreach(var p in skillPods)p.Tick(dt);
-        for(int i=falling.Count-1;i>=0;i--){ falling[i].Tick(dt); if(falling[i].done){Destroy(falling[i].gameObject);falling.RemoveAt(i);} }
+        for(int i=falling.Count-1;i>=0;i--){ falling[i].Tick(dt); if(falling[i].done){Kill(falling[i].gameObject);falling.RemoveAt(i);} }
         if(ship.grace>0)ship.grace-=dt;
         for(int i=skillPods.Count-1;i>=0;i--)if((skillPods[i].Position-ship.Position).magnitude<PodRadius){ Take(skillPods[i]); break; }
         for(int i=junk.Count-1;i>=0;i--)
@@ -160,8 +162,8 @@ public partial class OrbitSnake : MonoBehaviour
             {
                 // A whipped segment: a bullet on a great circle. It clears the first junk it meets and is spent after 8 s.
                 bool spent=j.age>8;
-                for(int k=junk.Count-1;k>=0&&!spent;k--){ var o=junk[k]; if(o==j||o.shot||o.shell!=level||(o.Position-j.Position).magnitude>ContactRadius)continue; Destroy(o.gameObject); junk.RemoveAt(k); if(k<i)i--; score+=25; Ping(2); spent=true; }
-                if(spent){ Destroy(j.gameObject); junk.RemoveAt(i); }
+                for(int k=junk.Count-1;k>=0&&!spent;k--){ var o=junk[k]; if(o==j||o.shot||o.shell!=level||(o.Position-j.Position).magnitude>ContactRadius)continue; Kill(o.gameObject); junk.RemoveAt(k); if(k<i)i--; score+=25; Ping(2); spent=true; }
+                if(spent){ Kill(j.gameObject); junk.RemoveAt(i); }
                 continue;
             }
             if(j.age<1||(j.Position-ship.Position).magnitude>ContactRadius)continue;
@@ -176,13 +178,13 @@ public partial class OrbitSnake : MonoBehaviour
     void Catch(OrbitJunk j)
     {
         caught++; score+=10+5*level; catchPulse=.4f;
-        if(ship.segments.Count<MaxSegments)ship.AddSegment(); Destroy(j.gameObject); Ping(1); ship.tailFlash=.3f;
+        if(ship.segments.Count<MaxSegments)ship.AddSegment(); Kill(j.gameObject); Ping(1); ship.tailFlash=.3f;
     }
 
     // A strike costs the two hindmost segments; armour eats one strike outright; with nothing left to shed the hull goes.
     void Strike(OrbitJunk j)
     {
-        Destroy(j.gameObject); strikes++;
+        Kill(j.gameObject); strikes++;
         if(armour>0){ armour=0; armourPulse=.7f; ship.grace=StrikeGrace; Ping(2); return; }
         strikePulse=.6f; ship.shake=1; StrikeRing();
         if(ship.segments.Count==0){ End(false,"Struck by "+(j.wreck?"your own wreckage":"debris")+" with nothing left to shed"); return; }

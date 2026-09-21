@@ -59,7 +59,8 @@ Both throw on failure and log a `PASS` line on success.
 
 ## ORBIT SNAKE (greybox, second game)
 
-![Orbit Snake: the train through a turn, junk tinted by the catch rule](./docs/orbit-train.png)
+![Orbit Snake: wordless HUD — arcs for the shell, pips for the train, glyphs for skills](./docs/orbit-hud.png)
+![Orbit Snake: three skill icons on offer after a climb](./docs/orbit-skills.png)
 
 A snake on the shell of a junk-choked planet, in the same project and the same zero-asset style. Top-down, constant speed, one control (turn), one button (Space), and a HUD with no words in it. Junk rides great circles; come up behind it with a matching heading and it becomes a segment, hit it any other way and you shed two. Bite your own tail and the loose segments become wreckage on the shell. At the quota, Space throws the whole train into the atmosphere and lifts you into the next, denser shell, where three skill icons float ahead of you: fly through one to keep it for the run.
 

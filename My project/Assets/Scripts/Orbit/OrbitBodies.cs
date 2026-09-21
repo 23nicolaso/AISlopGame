@@ -15,7 +15,7 @@ public class OrbitShip : MonoBehaviour
     public void Init(Vector3 n,Vector3 t,float r)
     {
         normal=n.normalized; tangent=(t-normal*Vector3.Dot(t,normal)).normalized; radius=targetRadius=r; dead=false; grace=0; turn=0; shake=0; brake=false; dashTimer=0; tailFlash=0;
-        foreach(var s in segments)Destroy(s.gameObject); segments.Clear();
+        foreach(var s in segments)OrbitSnake.Kill(s.gameObject); segments.Clear();
         trail.Clear(); trailDir.Clear(); trailLen.Clear();
         // Prime the trail straight behind the head so a fresh tail has somewhere to sit.
         for(int i=OrbitSnake.MaxSegments+1;i>=0;i--){ float back=i*OrbitSnake.SegmentSpacing/radius; Vector3 p=Quaternion.AngleAxis(-back*Mathf.Rad2Deg,Vector3.Cross(normal,tangent))*normal; trail.Add(p); trailDir.Add(Quaternion.AngleAxis(-back*Mathf.Rad2Deg,Vector3.Cross(normal,tangent))*tangent); trailLen.Add((OrbitSnake.MaxSegments+1-i)*OrbitSnake.SegmentSpacing); }
@@ -56,7 +56,7 @@ public class OrbitShip : MonoBehaviour
     }
 
     public void AddSegment(){ segments.Add(OrbitSnake.I.BuildSegmentArt(this,segments.Count)); Place(); }
-    public void RemoveLast(){ if(segments.Count==0)return; var s=segments[segments.Count-1]; segments.RemoveAt(segments.Count-1); Destroy(s.gameObject); }
+    public void RemoveLast(){ if(segments.Count==0)return; var s=segments[segments.Count-1]; segments.RemoveAt(segments.Count-1); OrbitSnake.Kill(s.gameObject); }
     public void Shed(int n){ for(int i=0;i<n;i++)RemoveLast(); }
     public void Lift(float r){ targetRadius=r; }
 
