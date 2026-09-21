@@ -20,6 +20,8 @@ public partial class AerialCombatPrototype
     public Vector3 hudTargetVelocity;
     // Nearest live seeker that has the player as its target: -1 when nothing is inbound.
     public float missileRange=-1,missileBeep;
+    // Lock tone spacing and the one-shot edge for the confirmation, both driven from LockTick's simulation dt.
+    public float lockBeep; bool lockAnnounced;
     public Vector3 missileSource;
     public bool overheated;
     // Comfort settings, persisted in PlayerPrefs and edited from the pause overlay.
@@ -84,6 +86,20 @@ public partial class AerialCombatPrototype
         missileBeep-=dt;
         if(missileBeep<=0){missileBeep=interval;if(audioSource)audioSource.PlayOneShot(missileTone,.5f);}
     }
+    // The acquisition tone: a rising pip every .3 s while the lock builds, one confirmation the frame it completes.
+    // Same reasoning as MissileTick — this is a rate, so it runs on the simulation clock from FixedUpdate.
+    public void LockTick(float dt)
+    {
+        if(!player || !player.Alive || !player.lockTarget){lockBeep=0;lockAnnounced=false;return;}
+        if(player.lockTimer>=ArenaPilot.LockTime)
+        {
+            if(!lockAnnounced){lockAnnounced=true;if(audioSource)audioSource.PlayOneShot(lockConfirm,.5f);}
+            lockBeep=0;return;
+        }
+        lockAnnounced=false;
+        lockBeep-=dt;
+        if(lockBeep<=0){lockBeep=.3f;if(audioSource)audioSource.PlayOneShot(lockTone,.4f);}
+    }
     // Back-out ease: 1.25x on the frame the number changes, a shallow undershoot, then home inside .18 s.
     float Pop(float timer){ if(timer<=0)return 1; float t=1-Mathf.Clamp01(timer/.18f); return 1+.25f*(1-t)*Mathf.Cos(t*Mathf.PI*1.5f); }
     void Styles()
@@ -140,12 +156,15 @@ public partial class AerialCombatPrototype
         }
     }
     // The one thing the reticle is locked onto gets a full read: brackets, hull state, callsign, range.
-    void TargetBox(Transform t,Vector2 bore)
+    void TargetBox(Transform t,Vector2 bore,Vector3 targetVelocity,bool lead)
     {
         bool visible;Vector2 v=Project(t.position,out visible);
         var foe=t.GetComponent<ArenaPilot>();var wreck=t.GetComponent<SalvageCore>();
         float distance=Vector3.Distance(player.transform.position,t.position);
         Color c=foe?new Color(1,.45f,.18f):wreck && wreck.kind==CoreKind.Volatile?new Color(.78f,.38f,1):wreck && wreck.kind==CoreKind.Armored?new Color(.81f,.87f,.95f):new Color(1,.74f,.18f);
+        // A completed seeker lock repaints the whole box: the same brackets, in the colour of a missile about to leave the rail.
+        bool locked=player.lockTarget==t && player.lockTimer>=ArenaPilot.LockTime;
+        if(locked)c=new Color(1,.2f,.12f);
         if(visible)
         {
             // Sized on range: a 40 m pass frames the whole hull at 55 px, a 600 m speck still reads as a 15 px box.
@@ -166,12 +185,45 @@ public partial class AerialCombatPrototype
             Box(new Rect(v.x-22,barY,44*fraction,4),foe?new Color(1,.32f,.13f):c);
             string label=foe?foe.callsign.ToUpper():wreck?(wreck.kind==CoreKind.Volatile?"VOLATILE WRECK":wreck.kind==CoreKind.Armored?"ARMORED WRECK":"SALVAGE WRECK"):"TARGET";
             GUI.color=c;
-            Text(new Rect(v.x-90,barY+6,180,18),label+"   "+Mathf.RoundToInt(distance)+" m",centered);
+            Text(new Rect(v.x-90,barY+6,180,18),(locked?"LOCK   ":"")+label+"   "+Mathf.RoundToInt(distance)+" m",centered);
             GUI.color=Color.white;
         }
-        Vector3 lead=InterceptPoint(player,t.position,hudTargetVelocity,360);
-        Vector2 l=Project(lead,out visible);
+        if(!lead)return;
+        Vector3 ahead=InterceptPoint(player,t.position,targetVelocity,360);
+        Vector2 l=Project(ahead,out visible);
         if(visible){Ring2D(l,6,new Color(1,.74f,.18f));Line(bore,l,new Color(1,.75f,.2f,.4f));}
+    }
+    // The lock reads as a clamp closing: a ring shrinking 40 px to 14 px over the 1.2 s with four chevrons riding it in,
+    // then a steady red ring and the word LOCK. Off-frame, it falls back to a chevron on the reticle ring so a lock the
+    // player earned and then rolled away from is still something they can find again.
+    void LockRing(Transform t,Vector2 bore)
+    {
+        float progress=Mathf.Clamp01(player.lockTimer/ArenaPilot.LockTime);
+        bool locked=progress>=1;
+        if(t!=hudTarget)TargetBox(t,bore,Vector3.zero,false);
+        bool visible;Vector2 v=Project(t.position,out visible);
+        if(!visible)
+        {
+            Vector3 local=cam.transform.InverseTransformDirection(t.position-player.transform.position);
+            if(local.sqrMagnitude>.01f)HitWedge(Mathf.Atan2(local.x,local.z),locked?.9f:.5f,new Color(1,.42f,.14f));
+            return;
+        }
+        float radius=Mathf.Lerp(40,14,progress);
+        Color c=locked?new Color(1,.2f,.12f):new Color(1,.62f,.2f);
+        float pulse=locked?(reduceFlashing?.9f:.55f+.45f*Mathf.Sin(Time.unscaledTime*9)):.85f;
+        Ring2D(v,radius,new Color(c.r,c.g,c.b,pulse));
+        for(int i=0;i<4;i++)
+        {
+            float a=i*Mathf.PI*.5f+(locked?Mathf.PI*.25f:progress*2.6f);
+            Vector2 d=new Vector2(Mathf.Cos(a),Mathf.Sin(a));
+            Line(v+d*(radius+4),v+d*(radius+13),new Color(c.r,c.g,c.b,pulse),2);
+        }
+        if(locked)
+        {
+            GUI.color=new Color(c.r,c.g,c.b,pulse);
+            Text(new Rect(v.x-60,v.y-radius-25,120,20),"LOCK",centered);
+            GUI.color=Color.white;
+        }
     }
     // Three rows a player can reach from the keyboard mid-match: the only settings that change what the eyes have to take.
     void ComfortPanel()
@@ -444,7 +496,11 @@ public partial class AerialCombatPrototype
         if(bankPop>0)GUI.matrix=beforePop*Matrix4x4.TRS(new Vector3(499,Height-52,0),Quaternion.identity,new Vector3(bankScale,bankScale,1))*Matrix4x4.Translate(new Vector3(-499,-(Height-52),0));
         Text(new Rect(495,Height-64,180,24),"BANKED "+player.score,small);
         GUI.matrix=beforePop;
-        Text(new Rect(681,Height-96,190,26),player.seekerCooldown>0?"SEEKER "+player.seekerCooldown.ToString("0.0")+"s":"SEEKER READY",small);
+        // One line carries the whole seeker state machine: cooling down, building a lock, holding one, or empty-handed.
+        bool holdingLock=player.lockTarget && player.lockTimer>=ArenaPilot.LockTime;
+        GUI.color=holdingLock?new Color(1,.34f,.2f):player.lockTarget?new Color(1,.78f,.32f):Color.white;
+        Text(new Rect(681,Height-96,190,26),player.seekerCooldown>0?"SEEKER "+player.seekerCooldown.ToString("0.0")+"s":holdingLock?"LOCKED":player.lockTarget?"LOCKING "+(ArenaPilot.LockTime-player.lockTimer).ToString("0.0")+"s":"SEEKER READY",small);
+        GUI.color=Color.white;
         // Above .92 the cannon is locked out, so the bar stops reading as remaining capacity and fills solid red instead.
         bool cooked=player.heat>.92f;
         float heatPulse=reduceFlashing?.5f:.5f+.5f*Mathf.Sin(Time.unscaledTime*12);
@@ -494,21 +550,25 @@ public partial class AerialCombatPrototype
             bool visible;Vector2 bore=Project(player.transform.position+player.transform.forward*350,out visible);
             // Locked-out weapons turn the whole reticle red; a landed hit whitens it, and reduced flashing keeps that gentle.
             Color c=cooked?new Color(1,.3f,.13f):hitFlash>0?(reduceFlashing?Color.Lerp(cyan,Color.white,.35f):Color.white):cyan;
-            Ring2D(bore,17,c);Box(new Rect(bore.x-1,bore.y-1,3,3),c);
+            // The ring IS the cone: 17 px cold, 26 px at the overheat gate, so the dispersion the gun has picked up is
+            // something the player watches open under sustained fire rather than a number they have to infer from misses.
+            float aperture=17+Mathf.Clamp01(player.heat)*9;
+            Ring2D(bore,aperture,c);Box(new Rect(bore.x-1,bore.y-1,3,3),c);
             // Four corner ticks kick 6 px outward on a landed hit and ease home over .12 s: the confirmation lives on the crosshair.
             float kick=hitPop>0?6*Mathf.Pow(hitPop/.12f,.6f):0;
             Color tickColor=hitGold>0?new Color(1,.82f,.28f):c;
             for(int q=0;q<4;q++)
             {
                 Vector2 d=new Vector2(q==0||q==3?-1:1,q<2?-1:1);
-                Line(bore+d*(11+kick),bore+d*(20+kick),tickColor,2);
+                Line(bore+d*(aperture-6+kick),bore+d*(aperture+3+kick),tickColor,2);
             }
             if(preciseTag>0)
             {
                 GUI.color=new Color(1,.85f,.3f,Mathf.Clamp01(preciseTag/.2f));
                 Text(new Rect(bore.x+26,bore.y-36,90,20),"x1.75",small);GUI.color=Color.white;
             }
-            if(hudTarget)TargetBox(hudTarget,bore);
+            if(hudTarget)TargetBox(hudTarget,bore,hudTargetVelocity,true);
+            if(player.lockTarget)LockRing(player.lockTarget,bore);
             int warning=0;
             if(cooked)Warning(ref warning,"OVERHEAT",new Color(1,.3f,.12f));
             if(player.Speed<45 && player.Altitude<500)Warning(ref warning,"STALL",new Color(1,.85f,.4f));
@@ -537,7 +597,7 @@ public partial class AerialCombatPrototype
             Text(new Rect(525,310,330,48),"REDEPLOYING  "+Mathf.CeilToInt(player.respawn),title);
         }
         if(elapsed<18 || paused)
-            Text(new Rect(30,110,975,30),"Mouse: pitch / bank   C: center   WASD: pitch / bank   QE: rudder   Shift / Ctrl: throttle   Space: boost   LMB: cannon   RMB: seeker",small);
+            Text(new Rect(30,110,1010,30),"Mouse: pitch / coordinated bank   C: center   WASD: pitch / bank   QE: rudder   Shift / Ctrl: throttle   Space: boost   LMB: cannon   RMB: hold lock, press again to fire",small);
         if(phase==MatchPhase.Countdown)CountdownCard();
         else if(phase==MatchPhase.Ended)ResultsPanel();
         if(paused){Text(new Rect(500,340,320,44),"PAUSED  /  ESC",title);ComfortPanel();}

@@ -34,16 +34,32 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public ParticleSystem windStreaks;
     readonly List<Object> owned = new List<Object>();
     Material alloy, dark, teal, red, gold, white, violet, slate, pillarMaterial;
+    // Cold alloy shrapnel for a terrain kill, kept as its own instance so the debris variant is testable by reference.
+    public Material crashDebris;
     AudioSource audioSource, engineSource;
-    AudioClip gunSound, hitSound, boomSound, collectSound, missileTone, overheatHiss;
+    AudioClip gunSound, hitSound, boomSound, collectSound, missileTone, overheatHiss, crashThud, lockTone, lockConfirm;
     Quaternion cameraRotation;
     Vector3 sunDirection=Vector3.up;
     // 14 m instead of 20: the aircraft has to own a sixth of the frame width, or nothing in the world has a readable scale.
     float cameraDistance=14;
     const float CameraLift=3.5f;
-    int spawnCounter;
+    public int spawnCounter;
     Vector2 mouseStick;
     const float MouseFlightSensitivity=.42f;
+    // Mouse-x is a bank input, and a bank with no rudder is an uncoordinated slide: a quarter of the raw stick goes to yaw.
+    public const float YawCoupling=.25f;
+    // Wings-level assist, player only. 15 deg/s is a fifth of a full-stick roll (85 deg/s), so it reads as the airframe
+    // settling rather than the aircraft flying itself, and the authority clamp keeps a deliberate input on top of it.
+    public const float AutoLevelRate=15f,AutoLevelAuthority=.35f,AutoLevelGain=1.2f,AutoLevelLimit=100f;
+    // A static field, not a const: the verification harness flips it off to prove the levelling is what closes the bank.
+    public static bool AutoLevelEnabled=true;
+    // Cannon dispersion is the heat's second cost after the .92 lockout: 0 cold, 2.02 degrees at the gate.
+    public const float CannonSpread=2.2f;
+    // Seeker lock: an 18 degree cone held for 1.2 s inside 650 m, which is the same envelope AimTarget already reports.
+    public const float LockCone=18f,LockRange=650f;
+    // Redeploy corridors, lat/lon at 170 m altitude, 509-669 m apart, plus the clearance a corridor has to have.
+    public static readonly Vector2[] PlayerLanes={new Vector2(0,-14),new Vector2(0,14),new Vector2(16,0)};
+    public const float SafeSpawnRange=300f;
     public static float Altitude(Vector3 p) => Vector3.Distance(p,PlanetCenter)-PlanetRadius;
     public static Vector3 Up(Vector3 p) => (p-PlanetCenter).normalized;
     public static float Density(float altitude) => Mathf.Exp(-Mathf.Max(0,altitude)/280f);
@@ -77,6 +93,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
         violet=Material(new Color(.55f,.24f,1.32f),true);
         // Armour belts read as mass: darker and duller than the hull alloy so a reinforced wreck is obvious before the first shot.
         slate=Material(new Color(.17f,.19f,.23f),false);
+        // Torn skin, not burning fuel: a crash sheds pale cold alloy where a shoot-down sheds hot gold.
+        crashDebris=Material(new Color(.86f,.92f,1.02f),true);
         RenderSettings.skybox=null; RenderSettings.fog=false;
         // Trilight gives the hull shading a direction (cold sky above, warm ground bounce below) instead of flat fill.
         RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Trilight;
@@ -108,6 +126,11 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // A short falling pip that cannot be mistaken for the cannon, and a wide hiss for the weapon bay venting.
         missileTone=Sound("Seeker lock pip",.08f,1400,1100,.05f);
         overheatHiss=Sound("Weapon overheat",.4f,3000,400,.75f);
+        // Ground, not fireball: a long dull thud well below the breakup boom, so a terrain kill is audible as a different event.
+        crashThud=Sound("Terrain impact",.6f,42,18,.5f);
+        // The lock climbs (900->1500) and the confirmation sits on top of it, so the ear hears the acquisition finish.
+        lockTone=Sound("Seeker lock climb",.09f,900,1500,.04f);
+        lockConfirm=Sound("Seeker locked",.22f,1500,1900,.03f);
         engineSource.clip=Sound("Engine",1,70,70,.12f); engineSource.volume=.08f; engineSource.Play();
         BuildPlanet();
         BuildSites();
@@ -156,9 +179,30 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public void Spawn(ArenaPilot p,bool initial=false)
     {
         int site=p.isPlayer?0:(p.id-1)%gates.Count;
+        float siteLat=new[]{18f,62,115,173,235,295}[site]-8,siteLon=site%2==0?0:32,siteAltitude=site%2==0?165:450;
         // Spawn on the same great-circle route as local resources, heading toward the nearest field.
-        Vector3 pos=p.isPlayer?new Vector3(0,165,0):SurfacePoint(new[]{18f,62,115,173,235,295}[site]-8,site%2==0?0:32,site%2==0?165:450);
-        if(!initial && p.isPlayer) pos=SurfacePoint((spawnCounter++%3)*4,0,170);
+        Vector3 pos=p.isPlayer?new Vector3(0,165,0):SurfacePoint(siteLat,siteLon,siteAltitude);
+        if(!initial && p.isPlayer)
+        {
+            // Redeploying inside gun range of whoever just shot you is not a respawn. Three fixed corridors are tried in
+            // rotating order and the first with 300 m of clearance wins; if the whole board is crowded, take the roomiest.
+            pos=SurfacePoint(PlayerLanes[spawnCounter%PlayerLanes.Length].x,PlayerLanes[spawnCounter%PlayerLanes.Length].y,170);
+            float widest=-1;
+            for(int i=0;i<PlayerLanes.Length;i++)
+            {
+                Vector2 lane=PlayerLanes[(spawnCounter+i)%PlayerLanes.Length];
+                Vector3 at=SurfacePoint(lane.x,lane.y,170);
+                float gap=NearestRivalDistance(p,at);
+                if(gap>=SafeSpawnRange){pos=at;break;}
+                if(gap>widest){widest=gap;pos=at;}
+            }
+            spawnCounter++;
+        }
+        // The AI keeps its own site — a rival that abandoned its patrol on death would unstick the whole map — and buys
+        // the same 300 m of clearance by walking the longitude out in +-10 degree steps instead.
+        else if(!initial)
+            for(int nudge=1;nudge<=4 && NearestRivalDistance(p,pos)<SafeSpawnRange;nudge++)
+                pos=SurfacePoint(siteLat,siteLon+(nudge%2==1?10:-10)*Mathf.CeilToInt(nudge*.5f),siteAltitude);
         p.transform.position=pos;
         SalvageCore nearest=NearestCore(pos);
         Vector3 direction=nearest ? nearest.transform.position-pos : Vector3.forward;
@@ -174,23 +218,25 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public void Banner(string text) { bannerText=text; bannerTimer=1.5f; }
 
     // Single dispatch point for the three feedback tiers: every event of the same weight gets the same layered package.
-    public void Feedback(string tier,Vector3 pos,ArenaPilot involved=null,AudioClip voice=null)
+    // `crash` is the death variant, not a new tier: same weight, cold alloy shrapnel and a ground thud instead of gold and a boom.
+    public void Feedback(string tier,Vector3 pos,ArenaPilot involved=null,AudioClip voice=null,bool crash=false)
     {
         bool mine=involved && involved==player;
         float proximity=player?1-Mathf.Clamp01(Vector3.Distance(pos,player.transform.position)/450):0;
         if(tier=="large")
         {
-            Burst(pos,28,3,true);
+            Burst(pos,28,3,true,crash);
+            AudioClip heavy=voice?voice:crash?crashThud:boomSound;
             if(mine)
             {
                 Trauma(.8f); hitFlash=Mathf.Max(hitFlash,.06f);
                 // Hit-stop is player-only: AI trading kills across the map must never stutter the frame.
-                hitStop=.08f; audioSource.PlayOneShot(voice?voice:boomSound,.7f);
+                hitStop=.08f; audioSource.PlayOneShot(heavy,.7f);
             }
             else
             {
                 Trauma(proximity*.35f);
-                if(proximity>0) audioSource.PlayOneShot(voice?voice:boomSound,proximity*.7f);
+                if(proximity>0) audioSource.PlayOneShot(heavy,proximity*.7f);
             }
         }
         else if(tier=="medium")
@@ -232,7 +278,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
             SpawnShard(victim.transform.position+Random.insideUnitSphere*10,value);
         }
         bool mine=victim==player || attacker==player;
-        Feedback("large",victim.transform.position,mine?player:null);
+        // No attacker means the planet took it: terrain impact, burn-through or a NaN state, all of them a crash.
+        Feedback("large",victim.transform.position,mine?player:null,null,!attacker || attacker==victim);
         if(victim==player)
         {
             damageFlash=.5f;
@@ -266,6 +313,13 @@ public partial class AerialCombatPrototype : MonoBehaviour
     {
         SalvageCore best=null; float distance=float.MaxValue;
         foreach(var c in cores) if(c.Available) { float d=(c.transform.position-position).sqrMagnitude; if(d<distance){distance=d;best=c;} }
+        return best;
+    }
+    // Distance from a prospective spawn to the nearest pilot who could shoot at it. float.MaxValue when the board is empty.
+    public float NearestRivalDistance(ArenaPilot p,Vector3 at)
+    {
+        float best=float.MaxValue;
+        foreach(var other in pilots) if(other!=p && other.Alive) best=Mathf.Min(best,Vector3.Distance(other.transform.position,at));
         return best;
     }
     public CaptureGate NearestGate(Vector3 position)
@@ -334,7 +388,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
             if((!victim && !wreck) || (victim && (victim==p || !victim.Alive || victim.invulnerable>0)) || (wreck && !wreck.Available))return false;
             target=preferredTarget;targetVelocity=victim?victim.velocity:Vector3.zero;
             Vector3 aim=InterceptPoint(p,target.position,targetVelocity,360)-p.transform.position;
-            if(Vector3.Distance(target.position,p.transform.position)>650 || Vector3.Angle(p.transform.forward,aim)>8 || !VisibleBetween(p.transform.position,target.position))return false;
+            // A launched seeker gets the whole lock cone: it was earned over 1.2 s of tracking, so it must not be refused
+            // by the cannon's 8 degree solution gate. Cannon fire through this branch is unchanged.
+            if(Vector3.Distance(target.position,p.transform.position)>LockRange || Vector3.Angle(p.transform.forward,aim)>(seeker?LockCone:8) || !VisibleBetween(p.transform.position,target.position))return false;
         }
         else target=AimTarget(p,seeker?18:6,out targetVelocity);
         if(seeker && (!target || p.seekerCooldown>0)) return false;
@@ -350,6 +406,15 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // firing solution passes its angle gate so a jittery pilot still shoots, it just does not shoot straight.
         float jitter=p.isPlayer?0:p.Profile.aimJitter;
         if(jitter>0)direction=Quaternion.AngleAxis(Random.Range(-jitter,jitter),Random.onUnitSphere)*direction;
+        // The player's version of that error is earned, not innate: a cold gun is exact, a gun held at the overheat gate
+        // throws two degrees wide. The deflection axis is perpendicular to the bore, so a 2 degree cone really is 2 wide.
+        float spread=p.isPlayer && !seeker?p.heat*CannonSpread:0;
+        if(spread>0)
+        {
+            Vector3 axis=Vector3.Cross(direction,Random.onUnitSphere);
+            if(axis.sqrMagnitude<.0001f)axis=p.transform.up;
+            direction=Quaternion.AngleAxis(Random.Range(-spread,spread),axis.normalized)*direction;
+        }
         // Gold tracer marks the bounty from the receiving end too: you can tell who is shooting at you before you turn around.
         Material tracer=p.id==aceId?gold:p.isPlayer?teal:red;
         // .32 cross-section instead of .22: at 100 m a .22 bolt is under two pixels, which reads as nobody shooting at all.
@@ -381,6 +446,33 @@ public partial class AerialCombatPrototype : MonoBehaviour
             time=t1>0 && t2>0?Mathf.Min(t1,t2):Mathf.Max(0,Mathf.Max(t1,t2));
         }
         return target+relative*Mathf.Min(time,3);
+    }
+
+    // The whole stick-to-control mapping, pure and static so the harness can measure it without a Keyboard.current.
+    // `keys` is the raw keyboard triple (pitch, rudder, bank) in -1..1; `stick` is the normalised mouse deflection.
+    // Mouse bank is damped to .42 so an aiming correction is not a snap roll, then a quarter of the RAW mouse-x is
+    // added to yaw: mouse turns come out coordinated, while Q/E rudder stays full strength and A/D stays pure bank.
+    public static Vector3 PilotControls(Vector2 stick,Vector3 keys)
+    {
+        return new Vector3(
+            Mathf.Clamp(keys.x+stick.y*MouseFlightSensitivity,-1,1),
+            Mathf.Clamp(keys.y+stick.x*YawCoupling,-1,1),
+            Mathf.Clamp(keys.z+stick.x*MouseFlightSensitivity,-1,1));
+    }
+
+    // RMB is two presses, never a hold: the first starts (or re-points) a lock, the second launches the missile it earned.
+    // Wrecks are exempt — a derelict does not evade, and the armoured belt is already priced for an instant seeker.
+    void SeekerPress()
+    {
+        if(player.lockTimer>=ArenaPilot.LockTime && player.lockTarget)
+        {
+            if(Shoot(player,true,player.lockTarget)){player.lockTarget=null;player.lockTimer=0;}
+            return;
+        }
+        Vector3 ignored; Transform candidate=AimTarget(player,LockCone,out ignored);
+        if(!candidate) return;
+        if(!candidate.GetComponent<ArenaPilot>()){Shoot(player,true,candidate);return;}
+        if(candidate!=player.lockTarget){player.lockTarget=candidate;player.lockTimer=0;}
     }
 
     void CenterStick()
@@ -454,20 +546,20 @@ public partial class AerialCombatPrototype : MonoBehaviour
                 if(stick.magnitude<.07f) stick=Vector2.zero;
             }
             mouseStick=stick;
-            player.controls=new Vector3(
-                Mathf.Clamp((k.sKey.isPressed?1:0)-(k.wKey.isPressed?1:0)+stick.y*MouseFlightSensitivity,-1,1),
+            player.controls=PilotControls(stick,new Vector3(
+                (k.sKey.isPressed?1:0)-(k.wKey.isPressed?1:0),
                 (k.eKey.isPressed?1:0)-(k.qKey.isPressed?1:0),
-                Mathf.Clamp((k.dKey.isPressed?1:0)-(k.aKey.isPressed?1:0)+stick.x*MouseFlightSensitivity,-1,1));
+                (k.dKey.isPressed?1:0)-(k.aKey.isPressed?1:0)));
             player.boost=k.spaceKey.isPressed;
             if((m!=null && m.leftButton.isPressed)||k.fKey.isPressed) Shoot(player);
-            if(m!=null && m.rightButton.wasPressedThisFrame) Shoot(player,true);
+            if(m!=null && m.rightButton.wasPressedThisFrame) SeekerPress();
         }
         engineSource.volume=player.Alive?.07f+player.throttle*.08f:0;
         engineSource.pitch=.65f+player.Speed/180+ (player.boost?.4f:0);
     }
 
-    // Missile proximity is a rate, and a rate needs the simulation clock, so it lives here and not in Update.
-    void FixedUpdate() { if(paused) return; MissileTick(Time.fixedDeltaTime); }
+    // Missile proximity and the lock tone are both rates, and a rate needs the simulation clock, not Update's.
+    void FixedUpdate() { if(paused) return; MissileTick(Time.fixedDeltaTime); LockTick(Time.fixedDeltaTime); }
 
     public void SnapCamera()
     {

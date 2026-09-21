@@ -80,12 +80,14 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         var clip=AudioClip.Create(name,count,1,22050,false); clip.SetData(samples,0); owned.Add(clip); return clip;
     }
 
-    public void Burst(Vector3 pos,int count,float size,bool explosion)
+    // `crash` swaps the fireball's gold for cold alloy and throws it slower and further: a hull coming apart on the rock
+    // does not burn, it sheds, so the same 28-piece package reads as a different kind of death from across the field.
+    public void Burst(Vector3 pos,int count,float size,bool explosion,bool crash=false)
     {
         for(int i=0;i<count;i++)
         {
-            var g=Shape("Hot debris",world,PrimitiveType.Cube,pos,Vector3.one*Random.Range(.08f,.3f)*size,explosion?gold:teal);
-            var f=g.AddComponent<ArenaDebris>(); f.velocity=Random.onUnitSphere*Random.Range(3,15)*size; f.life=explosion?1:.25f;
+            var g=Shape(crash?"Torn hull plating":"Hot debris",world,PrimitiveType.Cube,pos,Vector3.one*Random.Range(.08f,.3f)*size,crash?crashDebris:explosion?gold:teal);
+            var f=g.AddComponent<ArenaDebris>(); f.velocity=Random.onUnitSphere*Random.Range(crash?2:3,crash?9:15)*size; f.life=crash?1.6f:explosion?1:.25f;
         }
     }
 

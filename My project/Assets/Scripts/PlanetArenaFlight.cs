@@ -10,6 +10,11 @@ public partial class ArenaPilot : MonoBehaviour
     public float health=100, throttle=.72f, heat, fuel=1, respawn, invulnerable, fireCooldown, seekerCooldown;
     // Airframe temperature, distinct from the weapon's heat above: this one is earned by coming down too fast.
     public float hullHeat;
+    // Seeker lock state, player-only for now (no AI pilot fires a seeker — FlyTactics only ever calls Shoot(...,false,...)).
+    public Transform lockTarget;
+    public float lockTimer;
+    // 1.2 s of continuous tracking. Long enough that a missile is a decision, short enough to land inside one firing pass.
+    public const float LockTime=1.2f;
     float burnBank;
     // Decays on simulation dt, not wall clock, so rivals hearing gunfire stays deterministic under the verification harness.
     public float firedRecently;
@@ -62,6 +67,7 @@ public partial class ArenaPilot : MonoBehaviour
     {
         angularVelocity=Vector3.zero;controls=Vector3.zero;boost=false;
         fireCooldown=0;seekerCooldown=0;decision=0;firedRecently=0;recovering=false;
+        lockTarget=null;lockTimer=0;
         hullHeat=0;burnBank=0;
         coreTarget=null;shardTarget=null;gateTarget=null;rivalTarget=null;
         ResetTactics();ResetRenderPose();
@@ -95,6 +101,7 @@ public partial class ArenaPilot : MonoBehaviour
         heat=Mathf.Max(0,heat-dt*.22f);
         firedRecently=Mathf.Max(0,firedRecently-dt);
         if(!isPlayer) Think(dt);
+        else TrackLock(dt);
 
         Vector3 up=AerialCombatPrototype.Up(transform.position);
         float density=AerialCombatPrototype.Density(Altitude);
@@ -115,7 +122,27 @@ public partial class ArenaPilot : MonoBehaviour
         float authority=Mathf.Lerp(.4f,1,Mathf.Clamp01(speed/65)*density);
         // A pull-up from a terrain prediction is allowed to cheat the air: it is a survival reflex, not a dogfight advantage.
         if(recovering)authority=Mathf.Max(authority,.9f);
-        Vector3 rates=new Vector3(-controls.x*44,controls.y*27,-controls.z*85)*authority;
+        // Wings-level assist. Bank is the signed angle from the wing plane to the local radial, measured about the nose,
+        // and the roll channel gets a proportional correction that saturates at AutoLevelRate. It is player-only and
+        // only ever runs on a centred roll input with a light hand on the pitch, so a deliberate manoeuvre owns the axis
+        // outright; past 100 degrees of bank it stands down entirely and lets an inverted pass finish the roll.
+        float assist=0;
+        if(isPlayer && AerialCombatPrototype.AutoLevelEnabled && Mathf.Abs(controls.z)<.05f && Mathf.Abs(controls.x)<.5f)
+        {
+            Vector3 reference=Vector3.ProjectOnPlane(up,transform.forward);
+            if(reference.sqrMagnitude>.0001f)
+            {
+                float bankAngle=Vector3.SignedAngle(transform.up,reference.normalized,transform.forward);
+                if(Mathf.Abs(bankAngle)<AerialCombatPrototype.AutoLevelLimit)
+                {
+                    float roll=Mathf.Clamp(bankAngle*AerialCombatPrototype.AutoLevelGain,-AerialCombatPrototype.AutoLevelRate,AerialCombatPrototype.AutoLevelRate);
+                    // Divide out the same authority the rate is about to be multiplied by, floored so thin air cannot
+                    // turn a 15 deg/s request into a full-stick command.
+                    assist=Mathf.Clamp(-roll/(85*Mathf.Max(.35f,authority)),-AerialCombatPrototype.AutoLevelAuthority,AerialCombatPrototype.AutoLevelAuthority);
+                }
+            }
+        }
+        Vector3 rates=new Vector3(-controls.x*44,controls.y*27,-Mathf.Clamp(controls.z+assist,-1,1)*85)*authority;
         angularVelocity=Vector3.Lerp(angularVelocity,rates,1-Mathf.Exp(-(recovering?9:5)*dt));
         transform.rotation*=Quaternion.Euler(angularVelocity*dt);
         bool burner=boost && fuel>.02f;
@@ -144,6 +171,22 @@ public partial class ArenaPilot : MonoBehaviour
     }
 
     void Think(float dt) { FlyTactics(dt); }
+
+    // The seeker lock, advanced on simulation dt like everything else that is a rate. The lock holds only while the
+    // target is a living pilot still inside the firing cone, in range and not behind the planet; break any one of those
+    // and the whole 1.2 s is forfeit, which is what makes a hard break the counter-play to being locked.
+    void TrackLock(float dt)
+    {
+        var arena=AerialCombatPrototype.I;
+        if(!lockTarget){lockTimer=0;return;}
+        var foe=lockTarget.GetComponent<ArenaPilot>();
+        bool held=foe && foe.Alive && foe!=this && foe.invulnerable<=0
+            && Vector3.Distance(transform.position,lockTarget.position)<=AerialCombatPrototype.LockRange
+            && Vector3.Angle(transform.forward,lockTarget.position-transform.position)<=AerialCombatPrototype.LockCone
+            && arena.VisibleBetween(transform.position,lockTarget.position);
+        if(!held){lockTarget=null;lockTimer=0;return;}
+        lockTimer=Mathf.Min(LockTime,lockTimer+dt);
+    }
 }
 
 public enum CoreKind { Normal, Volatile, Armored }
