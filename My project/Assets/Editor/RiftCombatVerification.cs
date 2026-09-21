@@ -13,6 +13,45 @@ public static class RiftCombatVerification
         foreach(var bolt in UnityEngine.Object.FindObjectsByType<ArenaBolt>(FindObjectsSortMode.None))
             UnityEngine.Object.DestroyImmediate(bolt.gameObject);
     }
+    static void ClearDebris()
+    {
+        foreach(var piece in UnityEngine.Object.FindObjectsByType<ArenaDebris>(FindObjectsSortMode.None))
+            UnityEngine.Object.DestroyImmediate(piece.gameObject);
+    }
+    // Live debris split by which material the burst chose: `alloy` counts the crash variant, its inverse the hot gold.
+    static int CountDebris(AerialCombatPrototype g,bool alloy)
+    {
+        int found=0;
+        foreach(var piece in UnityEngine.Object.FindObjectsByType<ArenaDebris>(FindObjectsSortMode.None))
+        {
+            var renderer=piece.GetComponent<Renderer>();
+            if(renderer && (renderer.sharedMaterial==g.crashDebris)==alloy)found++;
+        }
+        return found;
+    }
+    // The same measurement the auto-level assist makes: signed roll of the wing plane against the local radial, about the nose.
+    static float BankOf(ArenaPilot pilot)
+    {
+        Vector3 reference=Vector3.ProjectOnPlane(AerialCombatPrototype.Up(pilot.transform.position),pilot.transform.forward);
+        if(reference.sqrMagnitude<.0001f)return 0;
+        return Vector3.SignedAngle(pilot.transform.up,reference.normalized,pilot.transform.forward);
+    }
+    // Forty rounds fired at a fixed weapon temperature with nothing in the sky to aim at, so the bore IS the intended
+    // aim: the angle between each round's own velocity (less the aircraft's) and the nose is exactly the dispersion.
+    static float MeanSpread(AerialCombatPrototype g,ArenaPilot shooter,float heat)
+    {
+        float sum=0; const int shots=40;
+        for(int i=0;i<shots;i++)
+        {
+            ClearBolts();shooter.fireCooldown=0;shooter.heat=heat;
+            if(!g.Shoot(shooter))throw new Exception("FLIGHT / COMBAT CHECK FAILED: spread probe could not fire at heat "+heat);
+            var bolt=UnityEngine.Object.FindAnyObjectByType<ArenaBolt>();
+            if(!bolt)throw new Exception("FLIGHT / COMBAT CHECK FAILED: spread probe produced no round");
+            sum+=Vector3.Angle(bolt.velocity-shooter.velocity,shooter.transform.forward);
+        }
+        ClearBolts();shooter.heat=0;shooter.fireCooldown=0;
+        return sum/shots;
+    }
     static void Place(ArenaPilot pilot,Vector3 position,Quaternion rotation)
     {
         pilot.transform.SetPositionAndRotation(position,rotation);
@@ -58,6 +97,9 @@ public static class RiftCombatVerification
         var oldPhase=g.phase;float oldPhaseTimer=g.phaseTimer;g.phase=MatchPhase.Playing;g.phaseTimer=0;
         var p=g.player;var bot=g.pilots[1];float maxCameraRate=0;
         int initialShots=bot.combatShotsFired,initialHits=bot.hitsLanded;
+        // WP-D readouts, declared up here so the PASS line can print what each new check actually measured.
+        float assisted=0,unassisted=0,hotSpread=0,coldSpread=0,lockReached=0,redeployGap=0;
+        int lockDropSteps=0,crashPieces=0,hotPieces=0;
         try
         {
             ClearBolts();
@@ -173,6 +215,68 @@ public static class RiftCombatVerification
             float coldTurn=SeekerTurn(g,p,false),burnerTurn=SeekerTurn(g,p,true);
             Check(coldTurn>2 && Mathf.Abs(burnerTurn/coldTurn-1.2f/2.3f)<.03f,"Boost halves the seeker's turn rate");
 
+            // Auto-level: 40 degrees of bank, stick released, three seconds. The assist is player-only, roll-input gated
+            // and dt-driven, so the identical 150 steps with the static switch off must leave the bank exactly standing.
+            Place(p,new Vector3(0,300,0),Quaternion.Euler(0,0,40));p.controls=Vector3.zero;
+            for(int i=0;i<150;i++)p.Simulate(.02f);
+            assisted=Mathf.Abs(BankOf(p));
+            AerialCombatPrototype.AutoLevelEnabled=false;
+            Place(p,new Vector3(0,300,0),Quaternion.Euler(0,0,40));p.controls=Vector3.zero;
+            for(int i=0;i<150;i++)p.Simulate(.02f);
+            unassisted=Mathf.Abs(BankOf(p));
+            AerialCombatPrototype.AutoLevelEnabled=true;
+            Check(assisted<8,"Released stick rolls the wings level inside three seconds");
+            Check(unassisted>25,"Auto-level disabled leaves the bank standing");
+
+            // Coordinated turn: full mouse-x is .42 of bank AND a quarter of rudder, while A/D bank stays pure.
+            Vector3 mouseOnly=AerialCombatPrototype.PilotControls(new Vector2(1,0),Vector3.zero);
+            Vector3 keysOnly=AerialCombatPrototype.PilotControls(Vector2.zero,new Vector3(0,0,1));
+            Check(Mathf.Abs(mouseOnly.y-AerialCombatPrototype.YawCoupling)<.001f && Mathf.Abs(mouseOnly.z-.42f)<.001f,"Mouse bank carries a quarter of coordinated rudder");
+            Check(Mathf.Abs(keysOnly.y)<.001f && Mathf.Abs(keysOnly.z-1)<.001f,"Keyboard bank stays uncoupled rudderless roll");
+
+            // Cannon dispersion is the heat's second price. Seeded so the sample mean is a fixed number, not a coin flip.
+            var randomBefore=UnityEngine.Random.state;UnityEngine.Random.InitState(20260921);
+            foreach(var other in g.pilots)Place(other,new Vector3(9000+other.id*2000,3000,0),Quaternion.identity);
+            Place(p,new Vector3(0,3000,0),Quaternion.identity);
+            hotSpread=MeanSpread(g,p,.9f);coldSpread=MeanSpread(g,p,0);
+            UnityEngine.Random.state=randomBefore;
+            Check(hotSpread>.8f,"A gun held at the overheat gate throws the cone open");
+            Check(coldSpread<.01f,"A cold gun puts the round exactly on the bore");
+
+            // Seeker lock: 1.2 s of tracking inside the 18 degree cone, and forfeit the moment the target leaves it.
+            ClearBolts();
+            foreach(var other in g.pilots)Place(other,new Vector3(9000+other.id*2000,1200,0),Quaternion.identity);
+            Place(p,new Vector3(0,1200,0),Quaternion.identity);
+            Place(bot,new Vector3(0,1200,400),Quaternion.identity);
+            p.lockTarget=bot.transform;p.lockTimer=0;
+            for(int i=0;i<60;i++)p.Simulate(.02f);
+            lockReached=p.lockTimer;
+            Check(lockReached>=ArenaPilot.LockTime-.0001f && p.lockTarget==bot.transform,"Seeker lock completes after 1.2 s inside the cone");
+            bot.transform.position=p.transform.position+p.transform.right*500;
+            for(int i=0;i<5 && p.lockTarget;i++){p.Simulate(.02f);lockDropSteps=i+1;}
+            Check(!p.lockTarget && p.lockTimer==0 && lockDropSteps<=5,"A target leaving the cone forfeits the whole lock");
+
+            // Redeploy: park a living rival 100 m off the corridor the rotation is about to hand out. The spawn has to
+            // walk to another one, and the same kill has to shed alloy debris rather than the shoot-down fireball.
+            Vector2 lane=AerialCombatPrototype.PlayerLanes[g.spawnCounter%AerialCombatPrototype.PlayerLanes.Length];
+            Vector3 blocked=AerialCombatPrototype.SurfacePoint(lane.x,lane.y,170),laneUp=AerialCombatPrototype.Up(blocked);
+            foreach(var other in g.pilots)if(other!=p)Place(other,blocked+laneUp*7000,Quaternion.identity);
+            Place(bot,blocked+laneUp*100,Quaternion.identity);
+            Place(p,new Vector3(0,600,0),Quaternion.identity);
+            ClearDebris();g.Kill(p,null);
+            crashPieces=CountDebris(g,true);int crashHot=CountDebris(g,false);
+            Check(crashPieces>=20 && crashHot==0,"A terrain kill sheds cold alloy debris");
+            ClearDebris();
+            for(int i=0;i<200 && !p.Alive;i++)p.Simulate(.02f);
+            Check(p.Alive,"The three second redeploy timer returns the player to the board");
+            redeployGap=g.NearestRivalDistance(p,p.transform.position);
+            Check(redeployGap>=AerialCombatPrototype.SafeSpawnRange,"Redeploy lands 300 m clear of every living rival");
+            p.invulnerable=0;g.Kill(p,bot);
+            hotPieces=CountDebris(g,false);
+            Check(hotPieces>=20 && CountDebris(g,true)==0,"A shot-down kill keeps the hot gold fireball");
+            ClearDebris();
+            foreach(var pilot in g.pilots){pilot.streak=0;g.Spawn(pilot);}
+
             // Three unanswered kills crowns an ace; dying hands the mark back to nobody.
             g.aceId=-1;foreach(var pilot in g.pilots){pilot.streak=0;pilot.cargo=0;}
             for(int i=2;i<=4;i++){var prey=g.pilots[i];prey.health=100;prey.invulnerable=0;g.Kill(prey,bot);}
@@ -180,10 +284,14 @@ public static class RiftCombatVerification
             bot.health=100;bot.invulnerable=0;g.Kill(bot,g.pilots[5]);
             Check(g.aceId==-1 && bot.streak==0,"Killing the ace clears the bounty");
 
-            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; precision 1.75x band; boost halves seeker turn rate; ace bounty crowning and clearing. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1")+", graze damage="+grazeDamage.ToString("F2")+" vs wide="+wideDamage.ToString("F2")+", seeker turn cold="+coldTurn.ToString("F2")+" deg vs burner="+burnerTurn.ToString("F2")+" deg";
+            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; precision 1.75x band; boost halves seeker turn rate; auto-level on a released stick and its off switch; coordinated mouse rudder versus uncoupled keyboard bank; heat-widened cannon spread and a cold bore; seeker lock timing and cone drop-out; safe redeploy spacing; crash versus shot-down debris; ace bounty crowning and clearing. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1")+", graze damage="+grazeDamage.ToString("F2")+" vs wide="+wideDamage.ToString("F2")+", seeker turn cold="+coldTurn.ToString("F2")+" deg vs burner="+burnerTurn.ToString("F2")+" deg, bank after 3 s assisted="+assisted.ToString("F1")+" deg vs unassisted="+unassisted.ToString("F1")+" deg, spread hot="+hotSpread.ToString("F2")+" deg vs cold="+coldSpread.ToString("F3")+" deg, lock="+lockReached.ToString("F2")+" s dropped in "+lockDropSteps+" step(s), redeploy gap="+redeployGap.ToString("F0")+" m, crash debris="+crashPieces+" vs shot-down="+hotPieces;
         }
         finally
         {
+            // Every static the harness flipped goes back, or the next run measures this one's settings.
+            AerialCombatPrototype.AutoLevelEnabled=true;
+            ClearDebris();
+            foreach(var pilot in g.pilots){pilot.lockTarget=null;pilot.lockTimer=0;}
             ClearBolts();foreach(var pilot in g.pilots){pilot.streak=0;g.Spawn(pilot);}
             g.aceId=-1;g.bountyFresh=0;
             foreach(var core in g.cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}

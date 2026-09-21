@@ -395,6 +395,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
         else target=AimTarget(p,seeker?18:6,out targetVelocity);
         if(seeker && (!target || p.seekerCooldown>0)) return false;
         if(seeker) p.seekerCooldown=7;
+        // Barrel temperature at the instant of the trigger pull, read before this round's own contribution: the shot
+        // that finally cooks the gun is still an accurate one, and a cold first round is exactly on the bore.
+        float barrel=p.heat;
         p.fireCooldown=seeker?.25f:.12f; p.heat+=seeker?.1f:.045f;
         p.shotsFired++;if(target && target.GetComponent<ArenaPilot>())p.combatShotsFired++;
         Vector3 direction=p.transform.forward;
@@ -408,7 +411,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         if(jitter>0)direction=Quaternion.AngleAxis(Random.Range(-jitter,jitter),Random.onUnitSphere)*direction;
         // The player's version of that error is earned, not innate: a cold gun is exact, a gun held at the overheat gate
         // throws two degrees wide. The deflection axis is perpendicular to the bore, so a 2 degree cone really is 2 wide.
-        float spread=p.isPlayer && !seeker?p.heat*CannonSpread:0;
+        float spread=p.isPlayer && !seeker?barrel*CannonSpread:0;
         if(spread>0)
         {
             Vector3 axis=Vector3.Cross(direction,Random.onUnitSphere);

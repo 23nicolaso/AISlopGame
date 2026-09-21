@@ -8,7 +8,7 @@ The arena builds automatically; no downloaded assets or start menu are required.
 - Shoot the glowing gold reactors on derelict ships. Fly close to the released gold salvage to collect it.
 - Fly through the large refinery rings and remain inside briefly to capture and bank your cargo. Cyan is neutral, teal is yours, orange is a rival's; red indicates a contested zone.
 - Banked salvage determines your leaderboard position. Seven named AI rivals gather, fight, bank, die, and respawn; their scores are earned in the simulation.
-- Death spills carried cargo, preserves banked score, and automatically redeploys you after three seconds.
+- Death spills carried cargo, preserves banked score, and automatically redeploys you after three seconds — into one of three launch corridors, picked so that no living rival is within 300 m of where you come back. Being shot down throws a gold fireball and a breakup boom; flying into the ground or burning through on re-entry sheds pale cold hull plating with a low thud instead, so you can tell from across the arena which one happened.
 - Resources and rivals return indefinitely. Higher-altitude salvage is worth more.
 
 ## Flight
@@ -17,15 +17,19 @@ Mouse displacement controls pitch and bank; the small tethered circle shows stic
 
 Mouse flight sensitivity is intentionally reduced so small aiming corrections do not throw the aircraft into a hard roll or pitch. Keyboard controls remain full-strength.
 
+Mouse turns are **coordinated**: a quarter of your mouse bank is fed into the rudder automatically, so a sweeping turn comes out clean instead of skidding. Q and E remain a full-strength independent rudder for when you want to skid on purpose, and A/D bank without touching the rudder at all.
+
+Let go of the roll axis and the aircraft **levels its own wings** at about 15°/s against the local vertical — a fifth of what a full-stick roll does, so it never fights you. The assist stands down the moment you put any roll input in, when you are pulling hard on the pitch axis, and past 100° of bank: if you have committed to going inverted, it lets you finish the roll. It is a player-only assist; the AI flies on the same raw control channel it always did.
+
 | Input | Action |
 | --- | --- |
 | W / S | Pitch down / up |
-| A / D | Roll left / right |
+| A / D | Roll left / right (no coupled rudder) |
 | Q / E | Rudder left / right |
 | Left Shift / Left Ctrl | Increase / decrease persistent throttle |
 | Space | Boost (recharging fuel) |
 | Left mouse / F | Cannon, with narrow-cone lead assistance |
-| Right mouse | Seeker missile |
+| Right mouse | Start / hold a seeker lock — press again once locked to fire (instant against wrecks) |
 | C | Center mouse steering |
 | Escape | Pause / resume (opens the comfort panel) |
 | Up / Down (or W / S) | Select a comfort row — **while paused** |
@@ -34,6 +38,12 @@ Mouse flight sensitivity is intentionally reduced so small aiming corrections do
 | Enter | Restart the match (results screen only) |
 
 Lift, drag, gravity, momentum, stall behavior, and thinner air affect flight. This is an assisted small-planet prototype with compressed distances, not an IL-2-level flight simulator or accurate orbital mechanics model.
+
+## Weapons
+
+**The cannon gets less accurate as it gets hot.** A cold gun puts the round exactly on the bore; by the time heat reaches the 92% lockout the cone has opened to about two degrees. You can see it happen — the reticle's outer ring swells from 17 to 26 pixels as the gun warms — so the choice is always visible: keep the trigger down and accept a spray, or fire in bursts and keep the pinpoint that the 1.75× precision bonus needs. Heat bleeds off at 22% a second, and the AI is unaffected by this: rival dispersion comes from each pilot's own signature aim jitter, not from temperature.
+
+**The seeker is now locked, not launched.** Right mouse starts a lock on whatever rival sits in the 18° cone within 650 m; the ring around them tightens from 40 px to 14 px over 1.2 seconds while a pip climbs in your ears, then the box turns red, prints `LOCK`, and the bottom strip reads `LOCKED`. Press right mouse again to launch. The lock is not sticky: if the target leaves the cone, leaves 650 m, dies, or slips behind the planet, the whole 1.2 seconds is gone and you start over — which means hard-breaking out of someone's nose is a real defence, and so is holding boost once the missile is already in the air. Wrecks are the exception: they cannot evade, so a seeker fires at them instantly, which is still the cheapest way through an armoured belt.
 
 ## Reading the arena
 
