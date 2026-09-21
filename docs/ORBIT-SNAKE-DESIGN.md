@@ -1,100 +1,83 @@
-# ORBIT SNAKE — design (v2, replaces the Kepler draft)
+# ORBIT SNAKE — Design
 
-Status: **awaiting sign-off.** Sections marked *decided* are the user's calls; sections marked *proposed* are Claude's reading and need a yes/no before any code. Nothing in the Kepler scaffold (`9304457`) survives except the tail-trail buffer.
+## Status
 
-## 1. Pitch
+Supersedes the free-flight Kepler draft committed as `9304457` (`OrbitSnake.cs` / `OrbitBodies.cs`). That code does not compile — it references art/audio partial members that were never written — and is being rewritten from scratch against this document. Nothing below reuses the old orbital-mechanics math; it reuses the *shape* of a few techniques (trail-buffer segment placement, dt-parameterized `Step()` for deterministic verification) that worked regardless of what state they were driving.
 
-A snake game on the shell of a planet. The world is a future Earth wrapped in space junk; low orbit has already been pulled down and is clean. You are a junk hauler: intercept debris from behind so it latches on as a segment, avoid hitting anything head-on, and when your train is long enough throw it all downward to burn up in the atmosphere — the recoil lifts you one shell higher, into dirtier sky, where you pick a new skill and do it again.
+## Pitch
 
-One control (turn), one button (level change), one verb (interception). The score is junk de-orbited.
+A future Earth buried in its own orbital debris. Low Earth orbit has already been swept clean once, by the last generation of sweepers. You're the next one: a segmented supply snake that grows by catching what Earth launches up to you, and climbs — shell by shell — into the higher belts that were never cleaned and have only gotten worse since.
 
-## 2. Decided (user's words)
+## Core movement — "only the normal changes"
 
-| Call | Source |
-| --- | --- |
-| No orbital mechanics. Play is 2D at a constant altitude; only the normal changes. | "去掉开普勒，做 2d 同高度，只改法线" |
-| 2D plus one button that changes level. | "2d + 一个按钮 levelchange" |
-| Eccentricity is not part of the game. | "偏心率和我想的不一样" |
-| Setting: a future world covered in space junk. | "太空垃圾覆盖未来世界" |
-| Backstory: LEO's junk has already been pulled down. | "LEO 的垃圾都被拉下去了" |
-| Snake; Earth launches supplies; accumulate segments then change level; each level unlocks a skill. | original pitch, not retracted |
+No orbital mechanics. The snake's position is pinned to a fixed-radius shell around the planet:
 
-## 3. World and movement — *proposed*
+```
+position = normal * shellRadius
+```
 
-- The planet is RIFT's sphere (radius 1200, centre (0,−1200,0)) reused as-is. Each level is a **shell**: a fixed altitude above it. Shell altitudes rise with level (e.g. 120, 170, 230, 300, 380 m).
-- The ship's state is a unit **normal** `n` (where it is on the shell) and a unit **tangent** `t` (heading), nothing else. Position is `centre + n·(R+altitude)`. Speed is constant per shell.
-- Each step: `n ← normalize(n + t·(v·dt/R_shell))`, then `t` is re-projected onto the new tangent plane. A/D (or mouse X) rotates `t` about `n` at a fixed turn rate. There is no throttle, no pitch, no fuel.
-- Because movement is a rotation of the normal, a straight run is a great circle and a held turn is a small circle: the snake naturally draws the same geometry the junk moves on.
-- Camera: RIFT's chase camera, pulled higher and further back so the horizon and roughly a quarter of the shell are in frame. Minimap only if the greybox shows it is needed.
+There is no separate velocity state to integrate. The snake moves at a constant speed along the shell surface; turning input (A/D) rotates the normal itself about the current heading axis, and heading is always recomputed as the tangent to that motion. Consequences:
 
-**Alternative reading of "只改法线"**: the ship has a fixed tangential speed and the only input is normal (turning) acceleration. This is the same thing expressed as forces instead of state; the state form above is easier to verify. Confirm which was meant.
+- No periapsis, apoapsis, eccentricity, or energy to manage — those words don't appear in this design.
+- The player never "falls." Leaving a shell only ever happens through the explicit Space action below, never as a physics outcome of a bad burn.
+- The world math is the same *shape* of problem RIFT already solved (`Up(p)`, great-circle bearings, `SurfacePoint`) for a different genre, so the planet/camera plumbing is reusable.
 
-## 4. Junk — *proposed*
+**Why position-based over acceleration-based** (left to my judgment — user said "whichever's funner"): a fixed-radius walk gives an exact, single-vector answer to "where is the snake" and "where is this debris" every frame, which is what the catch/strike and self-bite rules below need to stay crisp. An acceleration model would still have to re-project onto the shell every step to stop drift, buying nothing for a second integrated state it doesn't need.
 
-- Every piece of junk moves on a **great circle** of its shell: an orbit plane (axis) and a phase that advances at a fixed angular rate, prograde or retrograde. It never leaves its shell.
-- Where great circles cross each other and each other's poles is where junk naturally piles up. Those crossings are the dangerous, rich places; the design does not need to hand-place them.
-- Junk is both the food and the hazard. Which one is decided by **relative velocity at contact**:
-  - `|v_rel| < capture threshold` → it latches onto the tail as a segment (you came up behind it, matched its motion).
-  - `|v_rel| ≥ threshold` → **strike**: you lose the two hindmost segments; with none left, the hull goes and the run ends.
-- Classic snake rule: the head touching its own tail past the third segment **severs** it there. The loose segments become junk on the current shell, on the great circle the snake was drawing when it laid them, and come round again.
+## World
 
-## 5. Level change — *proposed*
+- **Planet**: one sphere, reusing RIFT's `SurfacePoint`/`Up` pattern at a scale tuned for camera legibility rather than RIFT's 1200 m arena radius.
+- **Shells**: concentric spherical surfaces above the planet, ascending only — LOW ORBIT → MID → HIGH → DEEP FIELD → ESCAPE. Direction is fixed by the backstory: LEO is the clean, safe starting shell; every climb moves into a shell that has never been swept.
+- **Camera**: small planet, elevated top-down-ish framing so the current shell band reads as a whole ring rather than a strip. A minimap is not planned for the greybox — only added if playtesting shows the single view can't carry it.
 
-- Space, when the train has at least the shell's quota (5, 7, 9, 11…): the whole train is **ejected downward**. It streaks into the atmosphere below (visible burn on the planet), banks score, and the recoil moves the ship up one shell.
-- Bigger train → higher multiplier at ejection. Holding on past the quota is the risk/reward knob: more score, longer tail to bite, more mass to lose on a strike.
-- Arriving on a new shell presents a **skill pick** (see §7) and starts that shell's Kessler clock.
+## The snake
 
-## 6. Kessler clock — *proposed*
+- A chain of segments trailing the head at fixed arc-length spacing along the shell surface — same trail-buffer indexing the old `SnakeShip.TrailPoint` used, just walking a sphere instead of sampling a Kepler ellipse.
+- Segments are the only currency: gained by catching supply, spent to change shells, lost to debris strikes or self-collision.
+- No fuel resource (explicitly cut) and no thrust budget — the only economy in the game is segment count.
 
-Junk on the current shell multiplies over time: pieces that cross each other spawn fragments. Early on a shell is sparse and forgiving; stay too long and it clogs. This is the only pressure against camping the safe shell, and it is diegetic — it is what the setting says is already happening.
+## Debris & hazards
 
-## 7. Earth launches and skills — *proposed*
+- Debris rides fixed-axis rotation on great circles of the current and adjacent shells — constant angular rate around one axis, deterministic by construction, easy for a headless verification step to assert against.
+- Where great circles cross (nodes) and at the poles, multiple debris rings intersect — these read as a shell's dense/dangerous zones for free, without a separate density system.
+- A Kessler clock slowly raises a shell's debris count/speed the longer a run stays on it, so camping the safe low shell is not a viable strategy — the field gets worse under you if you idle.
 
-- "Earth launches supplies" becomes the **skill delivery**: a pod climbs from the surface to your shell on arrival at a new level (and rarely mid-level). Catching it opens a choice of one skill out of two or three. Roguelite, not a fixed unlock order.
-- Candidate skills (keep to what the greybox proves it needs): wider capture window (magnet), a brief brake to widen the from-behind approach, tail whip (fire the last segment forward to destroy junk), one free strike (armour), segments also capture on contact (sweep), a short dash.
-- No meta-progression between runs. What persists is **wreckage**: where a run died, that snake's train is junk on that shell next run. Roguelike over soulslike: nothing to retrieve, only more to dodge.
+## Core verb: interception
 
-## 8. Run structure — *proposed*
+- Catch (safe) vs strike (damaging) is decided by **approach**, not raw speed: contact where the snake's heading roughly matches the debris's local direction of travel is a catch; any other contact angle is a strike. This is the fixed-speed-track version of "low relative velocity = capture, high = strike" — once both sides move at a constant local speed, matching heading *is* low relative velocity.
+- **Self-bite**: the head touching its own tail past a short buffer near the neck severs everything behind that point into loose debris left on the current shell — same rule as the old `CheckSelfCollision`, expressed in shell-arc-length instead of 3D distance.
 
-- One life. Score = junk de-orbited, multiplied by train size at ejection, plus a per-shell bonus. Highest shell reached is shown next to the score.
-- Death: struck with zero segments. The atmosphere is not a hazard (you never leave the shell) and there is no fuel to run out of.
-- Direction: **ascend** from clean LEO into dirtier shells. The backstory says LEO was cleaned, so the run starts where the game is easiest and the goal is upward.
+## Space — changing shells
 
-## 9. Greybox slice — the first thing built
+- A dedicated action (Space) ejects a batch of segments "downward" off the shell (they fall back toward the planet, cosmetically) and moves the head up one shell. Batch size is a player choice, up to the segments on hand — bigger batch banks a higher score multiplier on the ejection.
+- Segments spent this way are gone for good; forward progress on the new shell is funded entirely by catching fresh supply there.
 
-One sphere, one snake, junk on great circles, the from-behind capture rule, strike, self-bite, Space ejection to the next shell. No art beyond flat primitives, no skills, no Kessler clock, three shells.
+## Death
 
-**Kill criterion:** does *intercept from behind* hold up as the only action for five minutes of play? If it does not, nothing in §5–§8 will rescue it and the concept changes again before more is built.
+No fuel-out, no periapsis decay, no HP bar. Death is exactly one condition: struck by debris while holding zero segments. Segments are the buffer between the snake and dying — the same role a tail plays against a wall in a classic snake game.
 
-## 10. Verification (headless, deterministic)
+## Roguelite structure (confirmed)
 
-Rules and correctness only; feel needs a human. Each check drives `Step(dt)` at a fixed dt:
+- Reaching a new shell offers a choice of 1 of 2–3 skills, not a fixed unlock order — every run's build is different.
+- A run's wreckage (severed segments, the corpse of a failed climb) stays on the shell where it died and becomes part of that shell's hazard field for the *next* run. The world visibly accumulates the player's own failures.
+- No meta/account-level stat growth between runs. Every run starts even; the only thing that carries over is the wreckage left in the world.
 
-1. The normal stays unit and the altitude stays on the shell to 1e-3 over 60 s of turning.
-2. A held turn closes a small circle; a straight run returns to its start after one great circle.
-3. Junk stays on its orbit plane to 1e-3 and keeps its angular rate.
-4. Contact below the capture threshold adds a segment; above it sheds two; at zero segments it ends the run.
-5. Segment spacing along the trail stays within 10 % through a held turn.
-6. Self-bite past segment three severs, and the loose segments become junk on the current shell.
-7. Space below quota does nothing; at quota it ejects the train, raises the shell by one, and scores with the multiplier.
-8. Skill gating: a locked skill's input is inert.
-9. `paused` blocks `Step`.
-10. Determinism: two runs from the same seed produce the same score at t = 120 s.
+## Setting & tone
 
-Screenshot runner: three framed shots (launch, mid-train, ejection) for the README.
+A future Earth that already paid once to clean LEO, now sending up the mission that keeps doing it — one shell at a time, against belts that were never swept and keep getting worse on their own clock. README/marketing language should call this a debris-clearing snake game, not an orbital-mechanics simulator; the physics is deliberately gone.
 
-## 11. Discarded
+## Explicitly cut from the old draft
 
-Kepler free flight with player-managed ellipses (eccentricity is not the game). Concentric lanes with phasing and Hohmann transfers (user: "我们理解上有差别"). From the current code: Verlet integration, `Elements()`, `PointOn()`, vis-viva pod insertion, the energy/Kepler checks. Kept: the `SnakeShip` trail buffer; collisions become angular distance on the shell.
+- Velocity Verlet integration, `Conic`/`Elements()`, `PointOn()`, vis-viva pod-insertion burns, and any energy/eccentricity-based verification checks.
+- Kept as a *technique*, not as code: arc-length-indexed trail buffering for segment placement, now driven by shell-walk state instead of a Kepler state vector.
+- Collision checks move from Euclidean distance to angular distance on the shell, since everything now lives on a fixed radius.
 
-## 12. Sign-off list
+## Greybox scope — build this first
 
-| # | Question | Recommendation |
-| --- | --- | --- |
-| 1 | Movement = state (normal + tangent, A/D rotates heading) rather than normal acceleration? | Yes, state form. |
-| 2 | Ascend from clean LEO? | Yes. |
-| 3 | Junk is the food (capture by relative velocity); Earth launches deliver skills, not segments? | Yes. |
-| 4 | Roguelite skill pick, wreckage persists, no meta upgrades? | Yes. |
-| 5 | Drop fuel entirely? | Yes. |
-| 6 | Ejection = de-orbit burn that both scores and lifts you? | Yes. |
-| 7 | Greybox first, judged on the five-minute kill criterion? | Yes. |
+One sphere. One snake. Debris on great circles only — no per-shell belt density yet, no Kessler clock yet, no skill picks yet, no multi-shell ladder beyond a single Space up-shift to prove the transition works. Catch-from-behind is the only interaction rule implemented.
+
+**Kill/keep criterion**: does that single loop — walk the shell, dodge or catch debris by matching heading, risk severing your own tail if you get greedy — hold up as something worth five minutes of play? If it doesn't, the shell-walk model itself is what gets revisited, not the decoration around it.
+
+## Verification
+
+Headless editor checks (matching the RIFT convention: `RiftVerification.cs` / `RiftCombatVerification.cs`) cover rules and correctness only: shell radius is held exactly every step, heading follows A/D turning at the documented rate, catch vs. strike is decided correctly by approach angle, self-bite severs the correct suffix of the tail, and segment count changes exactly on catch / Space / strike. Whether it's *fun* is not something a harness can answer — that needs an actual playtest, ideally from a shared WebGL build rather than a description of the rules.
