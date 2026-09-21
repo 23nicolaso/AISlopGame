@@ -64,6 +64,7 @@
 
 ### Changed
 
+- `README.md`：顶图之下加入两张由 `RiftScreenshotRunner` 生成的真实截图（`docs/rift-launch.png` 发射点、`docs/rift-combat.png` 交战），操作表补上导弹锁定流程、暂停菜单里的舒适度设置和 Enter 重开，"The loop" 加入比赛结构 / 超载 / 王牌 / 货物重量 / 站点分层 / 残骸变体 / 再入过热的一句话说明，校验一节改为无人值守命令行用法，代码规模从过期的 ~1300 行更新为 ~2500 行 + 四个 shader。
 - **月球从"金属蛋"改成自建网格 + 烘焙晨昏线**：原来是一个 820 m 的 `PrimitiveType.Sphere` 套 `alloy`（metallic .45 / smoothness .45），挂在 66° 视场的角落上被透视拉成一枚铬鸡蛋。现在 `BuildMoon(position,radius)` 自己生成 64×32 的经纬球（UV 映射因此是**已知函数**）与 256×256 的陨坑贴图（三层 `PerlinNoise` + 14 个暗盘），**并把太阳项直接烘进贴图**：`light=.55+.45*saturate(dot(n,sunDirection))`，材质用 `Universal Render Pipeline/Unlit`。半径 320（直径 640，原 820），位置改为发射航向左 15.4°、仰角 15°、距离 6.8 km——离轴 30° 而不是原来的 47°，球体横向拉伸从 47% 降到 15%。
   - 为什么烘焙而不是用 Lit + emission：太阳在发射航向的**前方**，所以画面里任何位置的月球其可见半球必然是背光的（满月总在太阳对面，而太阳对面在你背后、不在画面里）。而 URP Lit 的自发光救不了它——**运行时 `material.EnableKeyword("_EMISSION")` 对 `shader_feature_local_fragment _EMISSION` 不生效**，`_EmissionColor` 开到 2.0 渲出来仍与不开像素级一致（已实测两轮截图验证）。烘焙之后晨昏线是真的，.55 的夜面底光就是地照。
 - **岩柱三分之一改用无光照暖砂岩**（`Material(new Color(.3,.255,.2),true)`）。根因：岩柱面向相机的那面法线是水平的，而 Trilight 环境光给水平法线的只有 `ambientEquatorColor`（.13,.19,.34，线性下约 .015–.093），所以**无论 albedo 给多高，背光的板子都是黑剪影**。改成 Unlit 常量色是唯一在不动全局环境光的前提下让地面有层次的办法；这些道具在 300 m 外只有 5–15 px 宽，本来也没有明暗可丢。剩下三分之二仍是原来的 `stone`，中继桅杆不变。

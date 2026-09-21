@@ -4,7 +4,10 @@
 
 A small-planet aerial combat / salvage prototype built in **Unity 6000.6.1f1** (URP, new Input System). Shoot the reactors on derelict ships, scoop up the gold salvage they spill, and fly through a refinery ring to bank it before one of seven AI rivals shoots it back out of you.
 
-Everything in the arena — the planet, atmosphere, ships, wrecks, refinery rings, sounds — is generated from code at runtime. There are no imported models, prefabs, colliders or rigidbodies: ~1300 lines of C# in `My project/Assets/Scripts` plus two custom URP shaders.
+Everything in the arena — the planet, sky, sun, moon, clouds, ships, wrecks, refinery rings, ground scatter, sounds — is generated from code at runtime. There are no imported models, textures, audio, prefabs, colliders or rigidbodies: ~2500 lines of C# in `My project/Assets/Scripts` plus four custom URP shaders.
+
+![Launch: first salvage field and refinery beacon dead ahead](./docs/rift-launch.png)
+![Combat: a rival banking away under fire](./docs/rift-combat.png)
 
 ## Play
 
@@ -17,10 +20,11 @@ Everything in the arena — the planet, atmosphere, ships, wrecks, refinery ring
 | W / S · A / D · Q / E | Pitch · roll · rudder |
 | Left Shift / Left Ctrl | Throttle up / down |
 | Space | Boost (recharging fuel) |
-| Left mouse / F | Cannon with lead assist |
-| Right mouse | Seeker missile |
+| Left mouse / F | Cannon with lead assist (spread opens with heat) |
+| Right mouse | Start a 1.2 s seeker lock on the boxed target; press again once locked to fire |
 | C | Recenter mouse |
-| Escape | Pause |
+| Escape | Pause — comfort settings (shake scale, reduced flashing, reduced camera motion) live here |
+| Enter | Restart the match from the results screen |
 
 Full rules, flight-model notes and the verification checklist are in [`PLAYTEST.md`](./PLAYTEST.md).
 
@@ -28,15 +32,25 @@ Full rules, flight-model notes and the verification checklist are in [`PLAYTEST.
 
 - **Salvage** — shoot the glowing gold reactor on a wreck; it bursts into salvage cubes that fly to the nearest pilot.
 - **Bank** — hold inside a refinery ring for ~1.4 s to claim it and convert carried cargo into score. Two pilots in the same ring contest it and nothing banks.
-- **Fight** — death spills carried cargo but keeps banked score; you redeploy in three seconds. Rivals gather, fight, retaliate, repair and bank on the same rules you do.
-- Higher-altitude salvage is worth more. Wrecks and rivals respawn indefinitely.
+- **Fight** — death spills carried cargo but keeps banked score; you redeploy in three seconds. Seven named rivals with distinct personalities gather, fight, retaliate, repair and bank on the same rules — and the same flight model — you do.
+- **Match** — five minutes on the clock, a results screen, Enter to go again. Every 90 s one refinery overcharges and pays double for 30 s; three unanswered kills crown an ace with a bounty the whole field hunts.
+- **Trade-offs** — cargo has weight, so a full hold turns and climbs worse. Surface fields are cheap and thick-aired; low-orbit fields pay triple in air too thin to fight in. Volatile wrecks detonate, armoured wrecks shrug off cannon fire and beg for a missile. Come down too fast and the hull burns.
 
-## Verify
+## Verify (headless, no clicking)
 
-There are no unit tests; the deterministic checks live as Editor menu items that run in Play Mode:
+Both deterministic suites and a five-frame screenshot pass run from the command line with the Editor closed:
 
-- `Rift > Verify planetary arena` — population, collection, banking, contest, cargo drops, respawns, pause, swept hits, neutral flight.
-- `Rift > Verify flip stability and rival combat` — chase camera through loops at 30/60/144 fps, AI engagement and retaliation, real projectile hits, cooldowns, occlusion, terrain recovery.
+```bash
+UNITY="/Applications/Unity/Hub/Editor/6000.6.1f1/Unity.app/Contents/MacOS/Unity"
+PROJECT="$(pwd)/My project"
+"$UNITY" -batchmode -nographics -projectPath "$PROJECT" -executeMethod RiftHeadlessRunner.Run -logFile /tmp/rift-verify.log   # exit 0 = pass
+"$UNITY" -batchmode -projectPath "$PROJECT" -executeMethod RiftScreenshotRunner.Run -logFile /tmp/rift-shots.log              # writes docs/screenshots/*.png
+```
+
+The same suites are also Editor menu items that run in Play Mode:
+
+- `Rift > Verify planetary arena` — population, collection, banking, contest, cargo drops, respawns, pause, swept hits, neutral flight, match phases, cargo weight, overcharge, re-entry heat, landmarks, HUD feed, comfort settings, audio mix, site value bands.
+- `Rift > Verify flip stability and rival combat` — chase camera through loops at 30/60/144 fps, AI perception and retaliation, real projectile hits, precision band, seeker lock and boost counter, auto-level, heat spread, safe respawn, crash vs shot-down, wreck variants, ace bounty.
 
 Both throw on failure and log a `PASS` line on success.
 
