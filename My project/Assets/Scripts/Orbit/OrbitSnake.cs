@@ -55,7 +55,9 @@ public partial class OrbitSnake : MonoBehaviour
     System.Random rng;
     // Built player: -orbit-screenshot=<png> captures the full frame with the IMGUI HUD 3 s in (Camera.Render in the
     // Editor cannot see OnGUI), on a scripted weave with a starter train, then quits.
-    string screenshotPath; bool shotTaken;
+    // -orbit-screenshot=<png> stages a train and turns for 3 s; -orbit-startshot=<png> captures the untouched start
+    // screen at 3 s, the same frame a browser shows before the first key, so platforms can be compared pixel for pixel.
+    string screenshotPath, startShotPath; bool shotTaken;
 
     public static float ShellRadius(int level) => PlanetRadius+ShellAltitude[Mathf.Clamp(level,0,ShellAltitude.Length-1)];
     public float CatchAngleNow => skills[(int)Skill.Magnet]?MagnetCatchAngle:CatchAngle;
@@ -75,7 +77,7 @@ public partial class OrbitSnake : MonoBehaviour
     {
         if(I&&I!=this){Destroy(gameObject);return;}
         I=this; Application.runInBackground=true;
-        foreach(var arg in System.Environment.GetCommandLineArgs())if(arg.StartsWith("-orbit-screenshot="))screenshotPath=arg.Substring(18);
+        foreach(var arg in System.Environment.GetCommandLineArgs()){ if(arg.StartsWith("-orbit-screenshot="))screenshotPath=arg.Substring(18); if(arg.StartsWith("-orbit-startshot="))startShotPath=arg.Substring(17); }
         best=PlayerPrefs.GetInt("orbit.best",0);
         foreach(var c in FindObjectsByType<Camera>())c.enabled=false;
         foreach(var l in FindObjectsByType<Light>())l.enabled=false;
@@ -253,6 +255,12 @@ public partial class OrbitSnake : MonoBehaviour
     void Update()
     {
         Time.timeScale=Time.unscaledTime<slowUntil&&!paused?slowScale:1; TickAudio(Time.unscaledDeltaTime);
+        if(startShotPath!=null)
+        {
+            if(!shotTaken&&Time.realtimeSinceStartup>3){ ScreenCapture.CaptureScreenshot(startShotPath); shotTaken=true; Debug.Log("[SHOT] start capture -> "+startShotPath); }
+            if(shotTaken&&Time.realtimeSinceStartup>4.5f)Application.Quit();
+            return;
+        }
         if(screenshotPath!=null)
         {
             started=true; slowUntil=-1;
