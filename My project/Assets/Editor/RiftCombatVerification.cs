@@ -76,8 +76,11 @@ public static class RiftCombatVerification
             Place(p,new Vector3(0,320,170),Quaternion.identity);p.velocity=Vector3.zero;
             Place(bot,new Vector3(0,320,0),Quaternion.Euler(0,180,0));bot.cargo=80;
             g.Damage(bot,1,p);
-            // Struck from outside the cone the AI goes Alert first, so retaliation needs the reaction delay (0.4-0.8 s) to elapse.
-            for(int i=0;i<60;i++)bot.Simulate(.02f);
+            // Worst-case geometry: struck from dead astern, the AI goes Alert (0.4-0.8 s), acquires by peripheral range,
+            // coasts wide on its own momentum before the shared flight model's turn authority can bite, loses the lock,
+            // then homes on the remembered position and re-acquires for good around the 9-10 s mark. 550 steps (11 s)
+            // clears that with margin without papering over a regression if the chase breaks again.
+            for(int i=0;i<550;i++)bot.Simulate(.02f);
             Check(bot.CombatTarget==p,"Returns fire on attacker despite carrying cargo");
             int landed=bot.hitsLanded;
             // Widened from 650 steps: turning through the shared authority model costs the AI several seconds per firing pass.

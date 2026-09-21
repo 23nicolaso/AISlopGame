@@ -31,7 +31,7 @@ public partial class ArenaPilot
     public ArenaPersonality Profile => ArenaPersonality.For(id);
     ArenaPilot aggressor, alertTarget;
     float retaliation, engagement, combatRest, breakTime, burstTime, burstRest, alertTimer, searchTimer;
-    Vector3 breakDirection, searchDirection;
+    Vector3 breakDirection, searchDirection, lastKnownPosition;
     bool repairing;
     float Reaction => Profile.reaction;
     const float ConeHalfAngle=55;   // 110 degree forward cone
@@ -41,7 +41,7 @@ public partial class ArenaPilot
     {
         aggressor=null;alertTarget=null;
         retaliation=engagement=combatRest=breakTime=burstTime=burstRest=alertTimer=searchTimer=0;
-        searchDirection=Vector3.zero;
+        searchDirection=Vector3.zero;lastKnownPosition=Vector3.zero;
         tactic="Salvage";
         repairing=false;
     }
@@ -51,7 +51,7 @@ public partial class ArenaPilot
         aggressor=attacker;retaliation=Profile.revenge;decision=0;combatRest=0;
         Vector3 toward=attacker.transform.position-transform.position;
         if(toward.sqrMagnitude<.01f)return;
-        searchDirection=toward.normalized;
+        searchDirection=toward.normalized;lastKnownPosition=attacker.transform.position;
         // Shot from outside the cone: the pilot only knows a bearing, and needs a beat to turn and find the shooter.
         if(Vector3.Angle(transform.forward,searchDirection)>ConeHalfAngle && alertTimer<=0)
         {alertTarget=attacker;alertTimer=Reaction;searchTimer=3;}
@@ -89,9 +89,9 @@ public partial class ArenaPilot
             bool lost=!CanEngage(rivalTarget,SightRange);
             if(lost || engagement<=0)
             {
-                // Lost contact is a search, not an instant shrug: fly the last known bearing for three seconds first.
+                // Lost contact is a search, not an instant shrug: fly back to the last known position for three seconds first.
                 Vector3 last=rivalTarget.transform.position-transform.position;
-                if(lost && last.sqrMagnitude>.01f){searchDirection=last.normalized;searchTimer=3;}
+                if(lost && last.sqrMagnitude>.01f){searchDirection=last.normalized;lastKnownPosition=rivalTarget.transform.position;searchTimer=3;}
                 else combatRest=5;
                 rivalTarget=null;decision=0;
             }
@@ -103,9 +103,12 @@ public partial class ArenaPilot
             bool hurt=health<34;
             if(hurt)repairing=true;
             if(health>=85)repairing=false;
-            // A doubling refinery overrides the personality's patience: even a hoarder will cash 15 units at 2x rather than wait.
+            // An unresolved grudge or an unprocessed contact holds off banking entirely: a pilot with cargo to cash does not
+            // quietly divert to a refinery mid-vendetta. Without this, gateTarget wins every decision tick (cargo>=bankAt
+            // stays true) and permanently short-circuits both retaliation and the opportunistic scan below, forever.
+            bool avenging=!repairing && (retaliation>0 || alertTimer>0);
             var surge=arena.OverchargedGate();
-            gateTarget=surge && cargo>=15?surge:(cargo>=Profile.bankAt || repairing)?arena.NearestGate(transform.position):null;
+            gateTarget=avenging?null:surge && cargo>=15?surge:(cargo>=Profile.bankAt || repairing)?arena.NearestGate(transform.position):null;
             if(gateTarget && cargo==0 && health>=85)gateTarget=null;
             // Retaliation also waits out the reaction delay, otherwise a blind-side hit would be answered instantly.
             bool retaliate=!repairing && retaliation>0 && alertTimer<=0 && CanEngage(aggressor,900);
@@ -114,7 +117,9 @@ public partial class ArenaPilot
                 if(rivalTarget!=aggressor)engagement=9;
                 rivalTarget=aggressor;gateTarget=null;
             }
-            else if(gateTarget)rivalTarget=null;
+            // No unconditional "gateTarget means give up the fight" branch here: an already-engaged rivalTarget (from
+            // this retaliation or from the opportunistic scan below) lives or dies by its own engagement/CanEngage
+            // checks above, not by whether the retaliation clock happens to run out on the same tick.
             else if(!rivalTarget && combatRest<=0 && alertTimer<=0)
             {
                 float best=float.MaxValue,reach=Profile.aggression;
@@ -126,7 +131,7 @@ public partial class ArenaPilot
                     // Heard but not seen: turn toward the noise and take the reaction delay before committing.
                     if(sense==1)
                     {
-                        if(!alertTarget){alertTarget=other;alertTimer=Reaction;searchTimer=3;searchDirection=(other.transform.position-transform.position).normalized;}
+                        if(!alertTarget){alertTarget=other;alertTimer=Reaction;searchTimer=3;searchDirection=(other.transform.position-transform.position).normalized;lastKnownPosition=other.transform.position;}
                         continue;
                     }
                     if(d>reach)continue;
@@ -162,16 +167,20 @@ public partial class ArenaPilot
         Vector3 up=AerialCombatPrototype.Up(transform.position);
         bool alert=alertTimer>0 && searchDirection.sqrMagnitude>.01f;
         bool searching=!alert && !rivalTarget && searchTimer>0 && searchDirection.sqrMagnitude>.01f;
-        tactic=alert?"Alert":gateTarget?"Bank / repair":rivalTarget?"Intercept":searching?"Search":shardTarget?"Collect":"Salvage";
-        if(alert)navigation=transform.position+searchDirection*400;
+        // Combat outranks banking: a rival actively being intercepted must not lose the chase to a mid-fight cargo run.
+        tactic=alert?"Alert":rivalTarget?"Intercept":gateTarget?"Bank / repair":searching?"Search":shardTarget?"Collect":"Salvage";
+        // Fly to the remembered world position, not a bearing that drifts with the pilot's own momentum: a target
+        // glimpsed once while coasting the wrong way must still be something the pilot can turn back toward.
+        if(alert)navigation=lastKnownPosition;
         else if(searching)
         {
-            // Weave across the last known bearing rather than flying a straight line past it.
-            Vector3 sweep=Quaternion.AngleAxis(Mathf.Sin((3-searchTimer)*2.2f)*38,up)*searchDirection;
-            navigation=transform.position+sweep*400;
+            // Converge on the last known position, then weave laterally across it instead of sitting on top of it.
+            Vector3 toward=lastKnownPosition-transform.position;
+            Vector3 lateral=Vector3.Cross(up,toward.sqrMagnitude>1?toward.normalized:transform.forward);
+            navigation=lastKnownPosition+lateral*Mathf.Sin((3-searchTimer)*2.2f)*120;
         }
-        else if(gateTarget)navigation=gateTarget.transform.position;
         else if(rivalTarget)navigation=AerialCombatPrototype.InterceptPoint(this,rivalTarget.transform.position,rivalTarget.velocity,360);
+        else if(gateTarget)navigation=gateTarget.transform.position;
         else if(shardTarget)navigation=shardTarget.transform.position;
         else if(coreTarget && coreTarget.Available)navigation=coreTarget.transform.position;
         else navigation=arena.gates[id%arena.gates.Count].transform.position;
@@ -180,18 +189,41 @@ public partial class ArenaPilot
         float distance=delta.magnitude;
         if(!arena.VisibleBetween(transform.position,navigation))
             delta=Vector3.ProjectOnPlane(delta,up).normalized*300+up*Mathf.Max(35,300-Altitude);
+        float descent=Mathf.Max(0,-Vector3.Dot(velocity,up));
+        bool recover=Altitude<85+descent*1.8f || AerialCombatPrototype.Altitude(transform.position+velocity*1.4f)<40;
+        recovering=recover;
+
+        // Fire BEFORE the close-range break-off is armed: the pass that finally closes inside 85 m is exactly the pass
+        // with the cleanest shot, and gating on the same breakTime the trigger below is about to set would deny that
+        // one frame every time, so a fighter could reach point-blank range and break away having never fired a shot.
+        Transform shootTarget=rivalTarget?rivalTarget.transform:(!gateTarget && !shardTarget && coreTarget && coreTarget.Available?coreTarget.transform:null);
+        Vector3 targetVelocity=rivalTarget?rivalTarget.velocity:Vector3.zero;
+        if(!recover && breakTime<=0 && alertTimer<=0 && shootTarget)
+        {
+            Vector3 aim=AerialCombatPrototype.InterceptPoint(this,shootTarget.position,targetVelocity,360)-transform.position;
+            // 7 degrees was a laser-rotation-era constant: the shared bank/pitch/yaw flight model tops out its best
+            // intercept angle right around 7 on a curved closing pass (measured empirically), so the old threshold
+            // could sit forever just outside a shot that was, in every practical sense, already lined up.
+            bool linedUp=aim.magnitude<600 && Vector3.Angle(transform.forward,aim)<9 && arena.VisibleBetween(transform.position,shootTarget.position);
+            if(linedUp && burstRest<=0)
+            {
+                burstTime+=dt;
+                arena.Shoot(this,false,shootTarget);
+                if(burstTime>.65f){burstTime=0;burstRest=.6f+id*.04f;}
+            }
+            else if(!linedUp)burstTime=0;
+        }
+
         // Commit to a short exit instead of trying to reverse on top of a target.
         if(rivalTarget && breakTime<=0 && distance<85)
         {
             breakTime=1.7f;
             breakDirection=(transform.forward+up*.35f+transform.right*(id%2==0?.4f:-.4f)).normalized;
         }
-        if(!rivalTarget || gateTarget)breakTime=0;
+        if(!rivalTarget)breakTime=0;
         if(breakTime>0){delta=breakDirection*250;tactic="Extend";}
-        if(gateTarget && distance<40)delta=transform.forward*150;
-        float descent=Mathf.Max(0,-Vector3.Dot(velocity,up));
-        bool recover=Altitude<85+descent*1.8f || AerialCombatPrototype.Altitude(transform.position+velocity*1.4f)<40;
-        recovering=recover;
+        // Final-approach nudge only applies when the gate is actually the navigation target this frame.
+        if(gateTarget && !rivalTarget && !alert && !searching && distance<40)delta=transform.forward*150;
         if(recover)
         {
             Vector3 tangent=Vector3.ProjectOnPlane(velocity,up).normalized;
@@ -214,25 +246,10 @@ public partial class ArenaPilot
         // Degrees of error that already demand full deflection; a pull-up commits harder than a dogfight correction.
         float gain=recover?12:22;
         controls=new Vector3(Mathf.Clamp(pitchError/gain,-1,1),Mathf.Clamp(yawError/(gain*1.3f),-1,1),Mathf.Clamp(rollError/(gain*1.6f),-1,1));
-        throttle=recover?1:gateTarget?.42f:rivalTarget?(distance>240?.95f:.58f):.72f;
+        // Same outranking as tactic/navigation: an engaged or alerted pilot never throttles down to the lazy banking speed.
+        throttle=recover?1:alert?.72f:rivalTarget?(distance>240?.95f:.58f):gateTarget?.42f:.72f;
         boost=recover && Speed<80 && fuel>.25f;
 
-        // Explicit target selection prevents a nearby wreck stealing a combat shot.
-        Transform shootTarget=rivalTarget?rivalTarget.transform:(!gateTarget && !shardTarget && coreTarget && coreTarget.Available?coreTarget.transform:null);
-        Vector3 targetVelocity=rivalTarget?rivalTarget.velocity:Vector3.zero;
-        // Alert means the contact has been noticed but not yet processed: turn onto it, hold fire.
-        if(!recover && breakTime<=0 && alertTimer<=0 && shootTarget)
-        {
-            Vector3 aim=AerialCombatPrototype.InterceptPoint(this,shootTarget.position,targetVelocity,360)-transform.position;
-            bool linedUp=aim.magnitude<600 && Vector3.Angle(transform.forward,aim)<7 && arena.VisibleBetween(transform.position,shootTarget.position);
-            if(linedUp && burstRest<=0)
-            {
-                burstTime+=dt;
-                arena.Shoot(this,false,shootTarget);
-                if(burstTime>.65f){burstTime=0;burstRest=.6f+id*.04f;}
-            }
-            else if(!linedUp)burstTime=0;
-        }
         if(gateTarget && cargo==0 && health>=85){gateTarget=null;decision=0;}
     }
 }
