@@ -82,13 +82,13 @@ public partial class ArenaPilot : MonoBehaviour
         Vector3 up=AerialCombatPrototype.Up(transform.position);
         float density=AerialCombatPrototype.Density(Altitude);
         float speed=Speed;
-        if(isPlayer)
-        {
-            float authority=Mathf.Lerp(.4f,1,Mathf.Clamp01(speed/65)*density);
-            Vector3 rates=new Vector3(-controls.x*44,controls.y*27,-controls.z*85)*authority;
-            angularVelocity=Vector3.Lerp(angularVelocity,rates,1-Mathf.Exp(-5*dt));
-            transform.rotation*=Quaternion.Euler(angularVelocity*dt);
-        }
+        // One rotation channel for everyone: AI writes the same -1..1 controls the mouse and keyboard write.
+        float authority=Mathf.Lerp(.4f,1,Mathf.Clamp01(speed/65)*density);
+        // A pull-up from a terrain prediction is allowed to cheat the air: it is a survival reflex, not a dogfight advantage.
+        if(recovering)authority=Mathf.Max(authority,.9f);
+        Vector3 rates=new Vector3(-controls.x*44,controls.y*27,-controls.z*85)*authority;
+        angularVelocity=Vector3.Lerp(angularVelocity,rates,1-Mathf.Exp(-(recovering?9:5)*dt));
+        transform.rotation*=Quaternion.Euler(angularVelocity*dt);
         bool burner=boost && fuel>.02f;
         fuel=Mathf.Clamp01(fuel+(burner?-.19f:.085f)*dt);
         Vector3 f=transform.forward;

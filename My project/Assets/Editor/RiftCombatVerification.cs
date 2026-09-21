@@ -58,16 +58,31 @@ public static class RiftCombatVerification
             for(int i=0;i<500;i++)p.Simulate(.02f);
             Check(!float.IsNaN(p.Speed) && p.Speed<400 && p.generation==generation && p.Alive,"Ten seconds of combined flight rotations remain finite and alive");
 
-            Place(p,new Vector3(0,1400,170),Quaternion.identity);p.velocity=Vector3.zero;
-            Place(bot,new Vector3(0,1400,0),Quaternion.identity);
+            // Combat now runs at a fighting altitude: the AI shares the player's air-density-scaled control authority,
+            // so an engagement staged at 1400 m would only be measuring how badly both sides turn in near-vacuum.
+            Place(p,new Vector3(0,320,170),Quaternion.identity);p.velocity=Vector3.zero;
+            Place(bot,new Vector3(0,320,0),Quaternion.identity);
             bot.Simulate(.02f);
             Check(bot.CombatTarget==p,"Engages an empty-cargo rival");ClearBolts();
-            Place(bot,new Vector3(0,1400,0),Quaternion.Euler(0,180,0));bot.cargo=80;
-            g.Damage(bot,1,p);bot.Simulate(.02f);
+
+            // Perception cone: approached from dead astern at 400 m by a rival who has not fired, the AI stays unaware.
+            Place(bot,new Vector3(0,900,0),Quaternion.identity);
+            Place(p,new Vector3(0,900,-400),Quaternion.identity);p.velocity=p.transform.forward*82;
+            for(int i=0;i<12;i++)bot.Simulate(.02f);
+            Check(bot.CombatTarget==null,"Blind-spot approach goes unnoticed");
+
+            Place(p,new Vector3(0,320,170),Quaternion.identity);p.velocity=Vector3.zero;
+            Place(bot,new Vector3(0,320,0),Quaternion.Euler(0,180,0));bot.cargo=80;
+            g.Damage(bot,1,p);
+            // Struck from outside the cone the AI goes Alert first, so retaliation needs the reaction delay (0.4-0.8 s) to elapse.
+            for(int i=0;i<60;i++)bot.Simulate(.02f);
             Check(bot.CombatTarget==p,"Returns fire on attacker despite carrying cargo");
             int landed=bot.hitsLanded;
-            for(int i=0;i<650 && p.Alive;i++)
+            // Widened from 650 steps: turning through the shared authority model costs the AI several seconds per firing pass.
+            for(int i=0;i<1600 && p.Alive;i++)
             {
+                // The player keeps plinking every 5 s so the 8.4 s engagement timer cannot lapse the fight into a salvage run.
+                if(i>0 && i%250==0 && bot.Alive)g.Damage(bot,1,p);
                 bot.Simulate(.02f);
                 foreach(var bolt in UnityEngine.Object.FindObjectsByType<ArenaBolt>(FindObjectsSortMode.None))bolt.Tick(.02f);
             }
@@ -87,7 +102,7 @@ public static class RiftCombatVerification
             float minimum=bot.Altitude;
             for(int i=0;i<300;i++){bot.Simulate(.02f);minimum=Mathf.Min(minimum,bot.Altitude);}
             Check(bot.deaths==deaths && minimum>4,"Predictive terrain recovery prevents crash");
-            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; loaded retaliation; actual projectile hits; protection/cooldown/occlusion; terrain recovery. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1");
+            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1");
         }
         finally
         {
