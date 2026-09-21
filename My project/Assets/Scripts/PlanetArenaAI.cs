@@ -1,15 +1,39 @@
 using UnityEngine;
 
+// Seven rivals, seven read-only dispositions. Every AI number that used to be derived from the id lives here instead,
+// so a callsign on the leaderboard predicts how that aircraft flies: who hunts, who hoards, who never forgets a hit.
+public struct ArenaPersonality
+{
+    public string tag;
+    public float aggression, bankAt, aimJitter, reaction, greed, revenge;
+    ArenaPersonality(string tag,float aggression,float bankAt,float aimJitter,float reaction,float greed,float revenge)
+    {
+        this.tag=tag;this.aggression=aggression;this.bankAt=bankAt;this.aimJitter=aimJitter;
+        this.reaction=reaction;this.greed=greed;this.revenge=revenge;
+    }
+    //                                           tag     reach  bank  jitter  react  greed  revenge
+    static readonly ArenaPersonality[] table={
+        new ArenaPersonality("SELF",                 0,     0,     0,     0,     1,     0),  // the player: nothing here steers a human
+        new ArenaPersonality("HUNT",               800,    45,   .8f,  .30f,  1.2f,     9),  // Moth.exe: commits from further out than anyone and reacts first
+        new ArenaPersonality("HORD",               350,    80,  1.8f,  .65f,   .8f,     6),  // Blue Finch: banks late, so it is usually the fattest target on the board
+        new ArenaPersonality("VULT",               560,    40,  1.3f,  .50f,  2.5f,     8),  // Periapsis: picks targets almost purely by how much they are carrying
+        new ArenaPersonality("STDY",               430,    25,  1.5f,  .55f,     1,     7),  // DustRunner: small frequent deposits, hard to break away from
+        new ArenaPersonality("AVNG",               520,    45,  1.6f,  .90f,  1.1f,    15),  // Kite-09: slowest to notice, longest to hold a grudge
+        new ArenaPersonality("ROOK",               450,    30,     3,  .85f,   .6f,     5),  // SoupDragon: the first kill the arena hands a new player
+        new ArenaPersonality("ELIT",               700,    50,   .5f,  .35f,  1.6f,    11)}; // Last Comet: no weak axis
+    public static ArenaPersonality For(int id) => table[Mathf.Clamp(id,0,table.Length-1)];
+}
+
 public partial class ArenaPilot
 {
     public string tactic="Salvage";
     public ArenaPilot CombatTarget => rivalTarget;
+    public ArenaPersonality Profile => ArenaPersonality.For(id);
     ArenaPilot aggressor, alertTarget;
     float retaliation, engagement, combatRest, breakTime, burstTime, burstRest, alertTimer, searchTimer;
     Vector3 breakDirection, searchDirection;
     bool repairing;
-    // Reaction delay is derived from the id so each callsign behaves consistently across a session.
-    float Reaction => .4f+(id%5)*.1f;
+    float Reaction => Profile.reaction;
     const float ConeHalfAngle=55;   // 110 degree forward cone
     const float PeripheralRange=250, SightRange=950, HearingRange=600;
 
@@ -24,7 +48,7 @@ public partial class ArenaPilot
     public void NotifyAttacked(ArenaPilot attacker)
     {
         if(isPlayer || !attacker || attacker==this)return;
-        aggressor=attacker;retaliation=9;decision=0;combatRest=0;
+        aggressor=attacker;retaliation=Profile.revenge;decision=0;combatRest=0;
         Vector3 toward=attacker.transform.position-transform.position;
         if(toward.sqrMagnitude<.01f)return;
         searchDirection=toward.normalized;
@@ -79,7 +103,7 @@ public partial class ArenaPilot
             bool hurt=health<34;
             if(hurt)repairing=true;
             if(health>=85)repairing=false;
-            gateTarget=(cargo>=35 || repairing)?arena.NearestGate(transform.position):null;
+            gateTarget=(cargo>=Profile.bankAt || repairing)?arena.NearestGate(transform.position):null;
             if(gateTarget && cargo==0 && health>=85)gateTarget=null;
             // Retaliation also waits out the reaction delay, otherwise a blind-side hit would be answered instantly.
             bool retaliate=!repairing && retaliation>0 && alertTimer<=0 && CanEngage(aggressor,900);
@@ -91,7 +115,7 @@ public partial class ArenaPilot
             else if(gateTarget)rivalTarget=null;
             else if(!rivalTarget && combatRest<=0 && alertTimer<=0)
             {
-                float best=float.MaxValue,reach=id%3==0?720:470;
+                float best=float.MaxValue,reach=Profile.aggression;
                 foreach(var other in arena.pilots)
                 {
                     int sense=Sense(other);
@@ -104,7 +128,7 @@ public partial class ArenaPilot
                         continue;
                     }
                     if(d>reach)continue;
-                    float rating=d-Mathf.Min(other.cargo,100)*1.5f;
+                    float rating=d-Mathf.Min(other.cargo,100)*Profile.greed;
                     if(rating<best){best=rating;rivalTarget=other;}
                 }
                 if(rivalTarget){engagement=8+id*.4f;alertTarget=null;alertTimer=0;}

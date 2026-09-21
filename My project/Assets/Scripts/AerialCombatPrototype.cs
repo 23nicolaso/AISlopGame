@@ -298,6 +298,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
         {
             direction=(InterceptPoint(p,target.position,targetVelocity,360)-p.transform.position).normalized;
         }
+        // Signature aim error: the rookie sprays four degrees wide of what the ace does, and it is applied after the
+        // firing solution passes its angle gate so a jittery pilot still shoots, it just does not shoot straight.
+        float jitter=p.isPlayer?0:p.Profile.aimJitter;
+        if(jitter>0)direction=Quaternion.AngleAxis(Random.Range(-jitter,jitter),Random.onUnitSphere)*direction;
         var g=Shape(seeker?"Seeker":"Cannon tracer",world,PrimitiveType.Cube,p.transform.position+p.transform.forward*5, new Vector3(.22f,.22f,seeker?2.5f:5),p.isPlayer?teal:red);
         var bolt=g.AddComponent<ArenaBolt>(); bolt.owner=p; bolt.velocity=direction*(seeker?170:360)+p.velocity;
         bolt.target=target; bolt.seeker=seeker;

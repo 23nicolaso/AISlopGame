@@ -3,7 +3,7 @@ using UnityEngine;
 
 public partial class AerialCombatPrototype
 {
-    GUIStyle small,normal,title,right,banner,clock,count,centered,rightBig;
+    GUIStyle small,normal,title,right,banner,clock,count,centered,rightBig,tag;
     bool stylesReady;
     readonly List<ArenaPilot> standings=new List<ArenaPilot>();
     float standingsRefresh;
@@ -20,6 +20,7 @@ public partial class AerialCombatPrototype
         count=new GUIStyle(banner){fontSize=96};
         centered=new GUIStyle(small){alignment=TextAnchor.MiddleCenter};
         rightBig=new GUIStyle(normal){alignment=TextAnchor.MiddleRight};
+        tag=new GUIStyle(small){fontSize=10,alignment=TextAnchor.MiddleRight};
         stylesReady=true;
     }
     // Chevron on a ring around the crosshair; the bearing is taken in camera space so it points where the eye looks.
@@ -175,7 +176,11 @@ public partial class AerialCombatPrototype
             var p=standings[i];float y=65+i*25;
             if(p==player)Box(new Rect(1018,y-1,232,24),new Color(.08f,.5f,.6f,.35f));
             GUI.color=p.Alive?Color.white:new Color(.5f,.5f,.5f);
-            Text(new Rect(1027,y,170,22),(i+1)+". "+p.callsign,small);
+            Text(new Rect(1027,y,118,22),(i+1)+". "+p.callsign,small);
+            // A four-letter disposition beside every callsign: by the second match the player knows who to hunt and who to avoid.
+            GUI.color=p.Alive?new Color(.45f,.66f,.76f):new Color(.36f,.4f,.44f);
+            Text(new Rect(1139,y+2,46,20),ArenaPersonality.For(p.id).tag,tag);
+            GUI.color=p.Alive?Color.white:new Color(.5f,.5f,.5f);
             Text(new Rect(1188,y,54,22),p.score.ToString(),right);GUI.color=Color.white;
         }
         KillBanner();
