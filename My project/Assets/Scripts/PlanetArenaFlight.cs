@@ -112,7 +112,9 @@ public partial class ArenaPilot : MonoBehaviour
         // spiral never out-runs the constant .3/s cooling and only a committed plunge into thick air can build.
         // Capped at 2 so a bad re-entry costs a third of the hull instead of being unrecoverable.
         float plunge=-Vector3.Dot(velocity,up)/100f;
-        hullHeat=Mathf.Clamp(hullHeat+((plunge>0?plunge*plunge*plunge*density*3.2f:0)-.3f)*dt,0,2);
+        // 2.4 rather than 3.2: at 3.2 an ordinary 85 m/s dive at 200 m went from cold to burning in three seconds, which
+        // the balance runs showed killing rivals on plain approaches. A committed plunge from the coast line still burns.
+        hullHeat=Mathf.Clamp(hullHeat+((plunge>0?plunge*plunge*plunge*density*2.4f:0)-.3f)*dt,0,2);
         if(hullHeat>1 && invulnerable<=0 && arena.MatchActive)
         {
             // Burn is banked into 4-point bites: 8/s through Damage() every step would fire the feedback layer 50 times a second.
@@ -225,7 +227,9 @@ public class SalvageCore : MonoBehaviour
         health-=damage;
         g.Feedback("small",transform.position,shooter);
         if(health>0) return;
-        cooldown=28; art.gameObject.SetActive(false);
+        // 70 s (was 28): a field has to run dry so its pilots move on. At 28 s every rival camped its home site for
+        // the whole match and the balance runs never saw two of them in the same sky.
+        cooldown=70; art.gameObject.SetActive(false);
         int pieces=kind==CoreKind.Armored?21:kind==CoreKind.Volatile?11:7;
         for(int i=0;i<pieces;i++) g.SpawnShard(transform.position+Random.insideUnitSphere*16,value);
         if(kind==CoreKind.Volatile)
@@ -404,7 +408,9 @@ public class ArenaBolt : MonoBehaviour
         if(pilot)
         {
             spent=true;bool precise=miss<PreciseRadius;
-            g.Damage(pilot,(seeker?60:12)*(precise?PreciseMultiplier:1),owner,precise);
+            // 18 per round (was 12): six ordinary hits or four with a graze to a kill. At 12 the balance matches ended
+            // with three kills between sixteen aircraft; at 14, seventy-five landed hits across three matches bought six.
+            g.Damage(pilot,(seeker?60:18)*(precise?PreciseMultiplier:1),owner,precise);
             Destroy(gameObject);
         }
         else if(core){spent=true;core.Hit(seeker?80:18,owner,seeker);Destroy(gameObject);}

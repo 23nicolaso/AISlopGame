@@ -182,7 +182,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // in thick air you can actually turn in. Low-orbit fields (odd index, 460 m) are the opposite trade — three
         // wrecks at 24, above the coast line where pickups already double, in air too thin to fight well in. The totals
         // stay at 24 wrecks, so the arena did not get bigger, it got lopsided, which is the whole point.
-        float[] lat={18,62,115,173,235,295};
+        // 32 degrees apart (670 m along the surface) instead of spread around the whole planet: neighbouring fields sit
+        // at the edge of each other's horizon, so pilots meet. Balance runs on the old ring of six had 77% of every
+        // match spent in transit and two of the seven rivals never sighting another aircraft.
+        float[] lat={18,50,82,114,146,178};
         for(int s=0;s<lat.Length;s++)
         {
             bool orbit=s%2==1; float lon=orbit?32:0; int wrecks=orbit?3:5;
@@ -208,7 +211,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public void Spawn(ArenaPilot p,bool initial=false)
     {
         int site=p.isPlayer?0:(p.id-1)%gates.Count;
-        float siteLat=new[]{18f,62,115,173,235,295}[site]-8,siteLon=site%2==0?0:32,siteAltitude=site%2==0?165:450;
+        float siteLat=new[]{18f,50,82,114,146,178}[site]-8,siteLon=site%2==0?0:32,siteAltitude=site%2==0?165:450;
         // Spawn on the same great-circle route as local resources, heading toward the nearest field.
         Vector3 pos=p.isPlayer?new Vector3(0,165,0):SurfacePoint(siteLat,siteLon,siteAltitude);
         if(!initial && p.isPlayer)
@@ -419,7 +422,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
             Vector3 aim=InterceptPoint(p,target.position,targetVelocity,360)-p.transform.position;
             // A launched seeker gets the whole lock cone: it was earned over 1.2 s of tracking, so it must not be refused
             // by the cannon's 8 degree solution gate. Cannon fire through this branch is unchanged.
-            if(Vector3.Distance(target.position,p.transform.position)>LockRange || Vector3.Angle(p.transform.forward,aim)>(seeker?LockCone:8) || !VisibleBetween(p.transform.position,target.position))return false;
+            if(Vector3.Distance(target.position,p.transform.position)>LockRange || Vector3.Angle(p.transform.forward,aim)>(seeker?LockCone:14) || !VisibleBetween(p.transform.position,target.position))return false;
         }
         else target=AimTarget(p,seeker?18:6,out targetVelocity);
         if(seeker && (!target || p.seekerCooldown>0)) return false;

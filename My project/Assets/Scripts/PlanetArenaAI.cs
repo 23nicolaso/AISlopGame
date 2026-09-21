@@ -28,11 +28,17 @@ public partial class ArenaPilot
 {
     public string tactic="Salvage";
     public ArenaPilot CombatTarget => rivalTarget;
+    // Read-only views for the balance harness and diagnostics: where the pilot is steering and what it is mining.
+    public Vector3 Navigation => navigation;
+    public SalvageCore CoreTarget => coreTarget;
+    public CaptureGate GateTarget => gateTarget;
     public ArenaPersonality Profile => ArenaPersonality.For(autopilot>=0?autopilot:id);
     ArenaPilot aggressor, alertTarget;
     float retaliation, engagement, combatRest, breakTime, burstTime, burstRest, alertTimer, searchTimer;
     Vector3 breakDirection, searchDirection, lastKnownPosition;
     bool repairing;
+    int reversalSign;
+    Vector3 runIn;
     float Reaction => Profile.reaction;
     const float ConeHalfAngle=55;   // 110 degree forward cone
     const float PeripheralRange=250, SightRange=950, HearingRange=600;
@@ -40,7 +46,7 @@ public partial class ArenaPilot
     void ResetTactics()
     {
         aggressor=null;alertTarget=null;
-        retaliation=engagement=combatRest=breakTime=burstTime=burstRest=alertTimer=searchTimer=0;
+        retaliation=engagement=combatRest=breakTime=burstTime=burstRest=alertTimer=searchTimer=0;reversalSign=0;runIn=Vector3.zero;
         searchDirection=Vector3.zero;lastKnownPosition=Vector3.zero;
         tactic="Salvage";
         repairing=false;
@@ -81,7 +87,7 @@ public partial class ArenaPilot
         {
             alertTimer=Mathf.Max(0,alertTimer-dt);
             // The delay has run out: commit to the contact if it is genuinely in sight now, otherwise keep sweeping.
-            if(alertTimer<=0){if(CanEngage(alertTarget,SightRange)){rivalTarget=alertTarget;engagement=8+id*.4f;decision=0;}alertTarget=null;}
+            if(alertTimer<=0){if(CanEngage(alertTarget,SightRange)){rivalTarget=alertTarget;engagement=12+id*.4f;decision=0;}alertTarget=null;}
         }
         if(rivalTarget)
         {
@@ -108,7 +114,9 @@ public partial class ArenaPilot
             // stays true) and permanently short-circuits both retaliation and the opportunistic scan below, forever.
             bool avenging=!repairing && (retaliation>0 || alertTimer>0);
             var surge=arena.OverchargedGate();
-            gateTarget=avenging?null:surge && cargo>=15?surge:(cargo>=Profile.bankAt || repairing)?arena.NearestGate(transform.position):null;
+            // The ring is latched once chosen: with fields 670 m apart two rings are often equidistant, and re-picking the
+            // nearest every 0.3 s had laden pilots zig-zagging between a 170 m ring and a 460 m ring for minutes.
+            gateTarget=avenging?null:surge && cargo>=15?surge:(cargo>=Profile.bankAt || repairing)?(gateTarget?gateTarget:arena.NearestGate(transform.position)):null;
             if(gateTarget && cargo==0 && health>=85)gateTarget=null;
             // Retaliation also waits out the reaction delay, otherwise a blind-side hit would be answered instantly.
             bool retaliate=!repairing && retaliation>0 && alertTimer<=0 && CanEngage(aggressor,900);
@@ -141,7 +149,7 @@ public partial class ArenaPilot
                     float rating=d-Mathf.Min(other.cargo,100)*Profile.greed*(bounty?2:1)-(bounty?300:0);
                     if(rating<best){best=rating;rivalTarget=other;}
                 }
-                if(rivalTarget){engagement=8+id*.4f;alertTarget=null;alertTimer=0;}
+                if(rivalTarget){engagement=12+id*.4f;alertTarget=null;alertTimer=0;}
             }
             shardTarget=null;float nearest=420;
             foreach(var shard in arena.shards)
@@ -171,6 +179,7 @@ public partial class ArenaPilot
         tactic=alert?"Alert":rivalTarget?"Intercept":gateTarget?"Bank / repair":searching?"Search":shardTarget?"Collect":"Salvage";
         // Fly to the remembered world position, not a bearing that drifts with the pilot's own momentum: a target
         // glimpsed once while coasting the wrong way must still be something the pilot can turn back toward.
+        if(!gateTarget)runIn=Vector3.zero;
         if(alert)navigation=lastKnownPosition;
         else if(searching)
         {
@@ -180,17 +189,42 @@ public partial class ArenaPilot
             navigation=lastKnownPosition+lateral*Mathf.Sin((3-searchTimer)*2.2f)*120;
         }
         else if(rivalTarget)navigation=AerialCombatPrototype.InterceptPoint(this,rivalTarget.transform.position,rivalTarget.velocity,360);
-        else if(gateTarget)navigation=gateTarget.transform.position;
+        else if(gateTarget)
+        {
+            // Racing line into the ring. A turn at 100 m/s is 240 m wide in thick air and 640 m at the 460 m fields, so
+            // chasing a 105 m sphere from inside that circle only orbits it: the bank sampler had laden pilots circling
+            // a ring at 200-600 m for two minutes. Off the nose and close, keep going straight to build room, then turn
+            // once and fly the ring in a straight run.
+            // The run-in point is latched, not recomputed: a stateless "close and off the nose" test flipped every time
+            // the turn crossed 450 m and orbited the ring at 160-660 m for a whole match.
+            Vector3 toGate=gateTarget.transform.position-transform.position;
+            float gateAngle=Vector3.Angle(transform.forward,toGate);
+            if(runIn==Vector3.zero && toGate.magnitude<450 && gateAngle>35)runIn=transform.position+transform.forward*600;
+            if(runIn!=Vector3.zero && (Vector3.Distance(transform.position,runIn)<90 || (gateAngle<20 && toGate.magnitude>450)))runIn=Vector3.zero;
+            navigation=runIn!=Vector3.zero?runIn:gateTarget.transform.position;
+        }
         else if(shardTarget)navigation=shardTarget.transform.position;
         else if(coreTarget && coreTarget.Available)navigation=coreTarget.transform.position;
-        else navigation=arena.gates[id%arena.gates.Count].transform.position;
+        else
+        {
+            // Idle hunters (reach >= 500) patrol toward the nearest rival instead of parking at a home ring: telemetry had
+            // the seven rivals spread one per site with 950 m of sight, which is a planet of strangers, not a match.
+            ArenaPilot prey=null;float near=2500;
+            if(Profile.aggression>=500)foreach(var other in arena.pilots){if(other==this || !other.Alive || other.invulnerable>0)continue;float d=Vector3.Distance(transform.position,other.transform.position);if(d<near){near=d;prey=other;}}
+            navigation=prey?prey.transform.position:arena.gates[id%arena.gates.Count].transform.position;
+        }
 
         Vector3 delta=navigation-transform.position;
         float distance=delta.magnitude;
         if(!arena.VisibleBetween(transform.position,navigation))
-            delta=Vector3.ProjectOnPlane(delta,up).normalized*300+up*Mathf.Max(35,300-Altitude);
+            // Over-the-horizon target: climb a little at low level to see it, but above the fields descend toward it —
+            // a permanent 35 m/300 m nose-up in vacuum is how every rival ended up at the 6500 m ceiling.
+            delta=Vector3.ProjectOnPlane(delta,up).normalized*300+up*(Altitude>400?-140:Mathf.Max(35,300-Altitude));
         float descent=Mathf.Max(0,-Vector3.Dot(velocity,up));
-        bool recover=Altitude<85+descent*1.8f || AerialCombatPrototype.Altitude(transform.position+velocity*1.4f)<40;
+        float density=AerialCombatPrototype.Density(Altitude);
+        // Balance telemetry (docs/balance) showed the old 85+1.8*descent / 1.4 s horizon arming at ~240 m against an
+        // 85 m/s sink: at half density the pull-up needs ~3 s and 250 m, so the aircraft hit the ground still pitching.
+        bool recover=Altitude<85+descent*2.6f || AerialCombatPrototype.Altitude(transform.position+velocity*2.2f)<40;
         recovering=recover;
 
         // Fire BEFORE the close-range break-off is armed: the pass that finally closes inside 85 m is exactly the pass
@@ -204,7 +238,10 @@ public partial class ArenaPilot
             // 7 degrees was a laser-rotation-era constant: the shared bank/pitch/yaw flight model tops out its best
             // intercept angle right around 7 on a curved closing pass (measured empirically), so the old threshold
             // could sit forever just outside a shot that was, in every practical sense, already lined up.
-            bool linedUp=aim.magnitude<600 && Vector3.Angle(transform.forward,aim)<9 && arena.VisibleBetween(transform.position,shootTarget.position);
+            // 14 degrees, matched to Shoot()'s gimbal: two matches of telemetry had hunters holding a target in range for
+            // 70-100 s and squeezing off under six seconds of fire, because a 9 degree cone on a curving pursuit is a
+            // window that opens for a frame or two per pass. The round is still aimed at the intercept point.
+            bool linedUp=aim.magnitude<600 && Vector3.Angle(transform.forward,aim)<14 && arena.VisibleBetween(transform.position,shootTarget.position);
             if(linedUp && burstRest<=0)
             {
                 burstTime+=dt;
@@ -228,9 +265,16 @@ public partial class ArenaPilot
         {
             Vector3 tangent=Vector3.ProjectOnPlane(velocity,up).normalized;
             if(tangent.sqrMagnitude<.1f)tangent=Vector3.ProjectOnPlane(transform.forward,up).normalized;
-            delta=tangent*170+up*240;tactic="Terrain recovery";
+            // Pull only as hard as the sink demands: a fixed 55 degree climb at full burner arrested the dive and then
+            // launched the aircraft — the balance runs' remaining launches all began as a terrain reflex.
+            delta=tangent*170+up*Mathf.Lerp(50,240,Mathf.Clamp01(descent/70));tactic="Terrain recovery";
         }
         Vector3 direction=delta.sqrMagnitude>.01f?delta.normalized:transform.forward;
+        // Dive limiter: gravity already supplies the descent in thin air, so the nose never points more than ~17 degrees
+        // below the horizon on the way to a lower target. Telemetry had rivals arriving at 240 m with 85 m/s of sink.
+        float down=Vector3.Dot(direction,up);
+        float steepest=Altitude>800?-.85f:-.3f;
+        if(!recover && down<steepest)direction=(Vector3.ProjectOnPlane(direction,up).normalized*Mathf.Sqrt(1-steepest*steepest)+up*steepest).normalized;
         Vector3 safeUp=Vector3.ProjectOnPlane(up,direction);
         if(safeUp.sqrMagnitude<.01f)safeUp=Vector3.ProjectOnPlane(transform.up,direction);
         if(safeUp.sqrMagnitude<.01f)safeUp=Vector3.ProjectOnPlane(transform.right,direction);
@@ -243,12 +287,48 @@ public partial class ArenaPilot
         float pitchError=Mathf.Asin(Mathf.Clamp(localDirection.y,-1,1))*Mathf.Rad2Deg;       // positive: target sits above the nose
         float yawError=Mathf.Atan2(localDirection.x,localDirection.z)*Mathf.Rad2Deg;         // positive: target sits to the right
         float rollError=Mathf.Atan2(localUp.x,localUp.y)*Mathf.Rad2Deg;                      // positive: wings need to drop right
+        // Diagnosed from a per-step trace: a target that has just passed behind the aircraft made yaw and roll saturate
+        // and flip sign every step around 180 degrees, and the nose was thrown far off the horizon; at the 460 m fields
+        // the velocity simply follows the nose and the aircraft went ballistic. The cure is the reversal hysteresis and
+        // the nose band below — NOT a pitch clamp for targets astern: that was tried, and it turned a bank-and-pull
+        // reversal into a rudder-only one, which at 320 m took 25 s to come around and broke retaliation outright.
+        // Hysteresis on the reversal direction: keep turning the way we already are once the target is near dead astern.
+        if(Mathf.Abs(yawError)>150 && reversalSign!=0)yawError=Mathf.Abs(yawError)*reversalSign;
+        reversalSign=Mathf.Abs(yawError)>90?(int)Mathf.Sign(yawError):0;
+        // Outside a terrain reflex the nose stays inside a horizon band that narrows with the air: 35 degrees in thick
+        // air, ~18 at the 460 m fields, 8 in vacuum. Past it, thin air turns the flight model into a cannon.
+        float noseElevation=Mathf.Asin(Mathf.Clamp(Vector3.Dot(transform.forward,up),-1,1))*Mathf.Rad2Deg;
+        float climb=Vector3.Dot(velocity,up);
+        float maxNose=Mathf.Lerp(8,35,Mathf.Clamp01(density/.5f));
+        if(!recover)
+        {
+            if(noseElevation>maxNose)pitchError=Mathf.Min(pitchError,maxNose-noseElevation);
+            else if(noseElevation<-35)pitchError=Mathf.Max(pitchError,-35-noseElevation);
+            // Energy rule: the height this climb rate will still gain with the engine off must not overshoot the target's
+            // altitude by more than 40 m. Launch traces showed 145 m/s aircraft pitching 35 degrees at a 460 m ring and
+            // coasting to 1600 m, because nothing up there bleeds speed. Applies to intercepts too: no zoom past the prey.
+            // Not while intercepting: a replay of the projectile check showed the rule pushing the nose down on a climbing
+            // gun pass at a target 120 m above, so the aim never closed inside 14 degrees. Fights need the vertical.
+            float zoom=climb>0?climb*climb/(2*AerialCombatPrototype.Gravity(transform.position)):0;
+            if(!rivalTarget && zoom>Mathf.Max(0,AerialCombatPrototype.Altitude(navigation)-Altitude)+40)pitchError=Mathf.Min(pitchError,-12);
+        }
         // Degrees of error that already demand full deflection; a pull-up commits harder than a dogfight correction.
         float gain=recover?12:22;
         controls=new Vector3(Mathf.Clamp(pitchError/gain,-1,1),Mathf.Clamp(yawError/(gain*1.3f),-1,1),Mathf.Clamp(rollError/(gain*1.6f),-1,1));
         // Same outranking as tactic/navigation: an engaged or alerted pilot never throttles down to the lazy banking speed.
-        throttle=recover?1:alert?.72f:rivalTarget?(distance>240?.95f:.58f):gateTarget?.42f:.72f;
-        boost=recover && Speed<80 && fuel>.25f;
+        // Full power in a pull-up only while still sinking; once the nose is above the horizon the speed is the danger.
+        throttle=recover?(descent>0?1:.6f):alert?.72f:rivalTarget?(distance>240?.95f:.58f):gateTarget?.42f:.72f;
+        // Level flight at density .2 (the 460 m fields) needs ~190 m/s; the lazy .42 banking throttle there is a
+        // slow-motion fall the pilot never notices until the pull-up. Floor the throttle on thinness: nothing changes
+        // below 170 m, full power from ~400 m up, and the burner arrests a sink that thrust alone cannot.
+        // Only while actually sinking: an unconditional floor in near-zero drag runs away to the 6500 m ceiling (one
+        // balance run lost 46 aircraft to it). Above the coast line and climbing, coast instead; gravity brings them home.
+        // The floor buys airspeed for lift, so it only makes sense with the nose near the horizon and inside the band
+        // where the fields are; nose-down it would just steepen the dive. Climbing past the target's altitude, past
+        // 650 m and climbing, or anywhere above 800 m, the engine is off: no drag up there, only gravity brings them home.
+        if(climb<-15 && Altitude<650 && down>-.15f)throttle=Mathf.Max(throttle,Mathf.Clamp01((.5f-density)/.3f));
+        else if(!recover && !rivalTarget && ((Altitude>650 && (climb>10 || Altitude>800)) || (climb>15 && Altitude>AerialCombatPrototype.Altitude(navigation)+60)))throttle=0;
+        boost=fuel>.25f && ((recover && Altitude<350 && descent>0 && (Speed<80 || descent>45)) || (Altitude>280 && Altitude<650 && descent>35 && !rivalTarget));
 
         if(gateTarget && cargo==0 && health>=85){gateTarget=null;decision=0;}
     }

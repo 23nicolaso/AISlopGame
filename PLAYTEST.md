@@ -88,6 +88,15 @@ Pause with Escape and a COMFORT panel appears under the PAUSED text. Three rows,
 - **REDUCE FLASHING** — turns the full-screen damage flash into a constant dim tint and takes the pulse out of the warning text and the overheat bar.
 - **REDUCE CAMERA MOTION** — removes the roll component of impact shake and the field-of-view widening on boost, which are the two things most likely to cause motion discomfort.
 
+## Balance runs
+
+Because nobody had flown the shared flight model by hand, the game plays itself: `RiftBalanceRunner` hands the player's airframe to a rotating rival personality and steps whole 300 s matches at a fixed 0.02 s, logging every death, every launch out of the atmosphere and every banking approach. Twelve rounds of that are written up in `docs/BALANCE-REPORT.md`. The headline changes it forced: the six salvage fields now sit 32 degrees apart along one arc instead of around the whole planet, wrecks take 70 s to regenerate so a field runs dry and its pilots move on, rivals obey an energy rule in thin air (no climb that would coast past the target's altitude), fly a straight run-in at a ring instead of orbiting it, and the cannon does 18 a round.
+
+```bash
+RIFT_BALANCE_MATCHES=3 "$UNITY" -batchmode -nographics -projectPath "$PROJECT" -executeMethod RiftBalanceRunner.Run -logFile /tmp/rift-balance.log
+grep "\[BAL\] match" /tmp/rift-balance.log      # one line per match; docs/balance/latest.json has the per-pilot detail
+```
+
 ## Verification
 
 While playing, use `Rift > Verify planetary arena` for deterministic checks of population, collection, banking, contest, cargo drops, score retention, player and rival respawning, pause behavior, swept hit detection, neutral flight, the per-band wreck values and counts, the engine layer cross-fade, and the wind bed's speed and vacuum gates. The check resets pilot positions and changes temporary match state.

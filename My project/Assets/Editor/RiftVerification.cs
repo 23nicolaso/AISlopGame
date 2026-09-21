@@ -138,9 +138,17 @@ public static class RiftVerification
             // every ring is more than 1.5 km from the whole field, because 30 s does not buy a trip around the planet.
             foreach(var pilot in g.pilots){pilot.score=0;pilot.cargo=0;}
             foreach(var ring in g.gates){ring.overcharge=0;ring.owner=-1;ring.claimant=-1;ring.progress=0;ring.ownerAge=0;}
-            // Sitting the whole field inside refinery 4 leaves it the only ring within 1.5 km: its nearest neighbour is 1609 m away.
-            var reachable=g.gates[3];g.aceId=-1;
-            foreach(var pilot in g.pilots)pilot.transform.position=reachable.transform.position;
+            // The six fields now sit 32 degrees apart, so no ring is alone inside 1.5 km of its own centre. Walk out past
+            // the last field along the empty side of the planet until exactly one ring is within reach, and stage there.
+            CaptureGate reachable=null;Vector3 stage=Vector3.zero;g.aceId=-1;
+            for(float lat=190;lat<340 && !reachable;lat+=2)
+            {
+                Vector3 candidate=AerialCombatPrototype.SurfacePoint(lat,0,170);int near=0;CaptureGate only=null;
+                foreach(var ring in g.gates)if(Vector3.Distance(ring.transform.position,candidate)<AerialCombatPrototype.OverchargeReach){near++;only=ring;}
+                if(near==1){reachable=only;stage=candidate;}
+            }
+            Check(reachable,"A staging point with exactly one reachable refinery exists on the empty side of the planet");
+            foreach(var pilot in g.pilots)pilot.transform.position=stage;
             g.overchargeTimer=0;g.MatchTick(AerialCombatPrototype.OverchargeInterval+.1f);
             int lit=0;foreach(var ring in g.gates)if(ring.overcharge>0)lit++;
             Check(lit==1 && reachable.overcharge>0,"Overcharge lights exactly one refinery, and only one within reach");
