@@ -60,4 +60,26 @@ public static class RiftBuild
         Debug.Log("[BUILD] " + report.summary.result + " -> " + output + " (" + report.summary.totalSize / (1024 * 1024) + " MB, " + report.summary.totalErrors + " errors)");
         if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
     }
+
+    // Orbit Snake WebGL player for itch.io: <repo>/Builds/ORBIT-web/ (index.html at the root, zip the folder as-is).
+    // itch.io serves .br/.gz files without a Content-Encoding header, so the build ships uncompressed; the canvas is
+    // 1280x720, the HUD's virtual resolution. productName is only borrowed for the page title and put back afterwards.
+    [MenuItem("Orbit/Build WebGL player")]
+    public static void OrbitWebGL()
+    {
+        EnsureShaderAssets(); OrbitSceneBuilder.Ensure();
+        string product = PlayerSettings.productName; bool bg = PlayerSettings.runInBackground;
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled; PlayerSettings.WebGL.decompressionFallback = false;
+        PlayerSettings.WebGL.template = "APPLICATION:Default"; PlayerSettings.defaultWebScreenWidth = 1280; PlayerSettings.defaultWebScreenHeight = 720;
+        PlayerSettings.productName = "ORBIT SNAKE"; PlayerSettings.runInBackground = true;
+        string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../Builds/ORBIT-web"));
+        Directory.CreateDirectory(output);
+        try
+        {
+            BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { OrbitSceneBuilder.ScenePath }, locationPathName = output, target = BuildTarget.WebGL, options = BuildOptions.None });
+            Debug.Log("[BUILD] " + report.summary.result + " -> " + output + " (" + report.summary.totalSize / (1024 * 1024) + " MB, " + report.summary.totalErrors + " errors)");
+            if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
+        }
+        finally { PlayerSettings.productName = product; PlayerSettings.runInBackground = bg; AssetDatabase.SaveAssets(); }
+    }
 }
