@@ -20,7 +20,8 @@ public static class OrbitVerification
     public static string Run()
     {
         var g=OrbitSnake.I; Check(g&&g.ship,"orbit snake booted");
-        bool wasPaused=g.paused;
+        bool wasPaused=g.paused, wasPersist=OrbitSnake.Persist; string savedWreck=PlayerPrefs.GetString(OrbitSnake.WreckKey,"");
+        OrbitSnake.Persist=false;
         try
         {
             // 1. Shell walk: normal stays unit, radius stays on the shell, tangent stays orthogonal through 60 s of hard turning.
@@ -122,9 +123,29 @@ public static class OrbitVerification
             string hud=System.IO.File.ReadAllText(Application.dataPath+"/Scripts/Orbit/OrbitHUD.cs");
             Check(Count(hud,"GUI.Label(")==1&&hud.Contains("GUI.Label(r,v.ToString(),digits)")&&Count(hud,"GUI.Box(")==0&&Count(hud,"GUI.Button(")==0,"the HUD draws one label and it is digits");
 
-            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism, skill offer and pick, magnet, armour, whip, brake, phase, compound, wordless HUD";
+            // 20. Kessler clock: nothing for 20 s, then one piece every 6 s on the current shell, reset by a climb, capped at 2x.
+            // The ship is parked dead and far off the shell so nothing it could touch changes the count.
+            g.Restart(8); s=g.ship; s.dead=true; s.radius=1e5f; int seed0=g.junk.Count;
+            for(int i=0;i<990;i++)g.Step(Dt); Check(g.kesslerSpawned==0&&g.junk.Count==seed0,"no Kessler junk in the first 20 s (spawned "+g.kesslerSpawned+", junk "+g.junk.Count+" vs "+seed0+")");
+            for(int i=0;i<2010;i++)g.Step(Dt); Check(g.kesslerSpawned>=6&&g.kesslerSpawned<=7&&g.junk.Count==seed0+g.kesslerSpawned,"Kessler adds a piece every 6 s after 20 s ("+g.kesslerSpawned+" in 40 s)");
+            foreach(var kj in g.junk)Check(kj.shell==0,"Kessler junk lands on the current shell");
+            for(int i=0;i<30000&&g.junk.FindAll(x=>x.shell==0).Count<OrbitSnake.JunkCount[0]*2;i++)g.Step(Dt); int atCap=g.junk.Count; for(int i=0;i<1000;i++)g.Step(Dt);
+            Check(g.junk.Count==atCap&&atCap==OrbitSnake.JunkCount[0]*2,"the clock stops at twice the seed count ("+atCap+")");
+            s.dead=false; s.radius=OrbitSnake.ShellRadius(0); Fill(s,OrbitSnake.EjectQuota[0]); g.Eject(); Check(g.shellTime==0&&g.kesslerSpawned==0,"a climb resets the clock");
+
+            // 21. Wreckage persists: a death with three segments leaves three gold wrecks on that shell next run; a win clears it.
+            OrbitSnake.Persist=true; PlayerPrefs.DeleteKey(OrbitSnake.WreckKey);
+            g.Restart(9); s=g.ship; Fill(s,3); g.End(false,"test"); Check(PlayerPrefs.HasKey(OrbitSnake.WreckKey),"death writes the wreckage store");
+            g.Restart(9); var loaded=g.junk.FindAll(x=>x.wreck&&x.shell==0); Check(loaded.Count==3,"next run loads three wrecks on shell 0 ("+loaded.Count+")");
+            foreach(var w in loaded)Check(Mathf.Abs(w.Position.magnitude-OrbitSnake.ShellRadius(0))<.05f,"loaded wreck sits on its shell");
+            g.End(true,"test"); Check(!PlayerPrefs.HasKey(OrbitSnake.WreckKey),"a win clears the store"); OrbitSnake.Persist=false;
+
+            // 22. Start gate: a waiting restart holds the world until started.
+            g.Restart(9,true); Check(!g.started,"a waiting restart is not started"); float e0=g.elapsed; g.Advance(Dt); Check(Mathf.Approximately(g.elapsed,e0),"the world holds before the first key"); g.started=true; g.Advance(Dt); Check(g.elapsed>e0,"the world runs once started");
+
+            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism, skill offer and pick, magnet, armour, whip, brake, phase, compound, wordless HUD, Kessler clock, wreckage persistence, start gate";
         }
-        finally { g.Restart(7); g.paused=wasPaused; }
+        finally { OrbitSnake.Persist=false; g.Restart(7); OrbitSnake.Persist=wasPersist; if(string.IsNullOrEmpty(savedWreck))PlayerPrefs.DeleteKey(OrbitSnake.WreckKey); else PlayerPrefs.SetString(OrbitSnake.WreckKey,savedWreck); g.paused=wasPaused; }
     }
 
     static void Quiet(OrbitSnake g){ foreach(var other in g.junk)other.age=-100; }

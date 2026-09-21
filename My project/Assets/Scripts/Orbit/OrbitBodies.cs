@@ -80,7 +80,7 @@ public class OrbitShip : MonoBehaviour
 // segment on the same rails that clears junk instead of feeding or striking the snake.
 public class OrbitJunk : MonoBehaviour
 {
-    public int shell; public Vector3 axis,u,w; public float phase,rate,age; public bool wreck,shot; public float spin; public Renderer body;
+    public int shell; public Vector3 axis,u,w; public float phase,rate,age; public bool wreck,shot; public float spin; public Renderer body; public Renderer[] tint;
     public void Init(int s,Vector3 a,float p,float r,bool isWreck)
     {
         shell=s; axis=a.normalized; phase=p; rate=r; wreck=isWreck; age=0; spin=(p*57)%360;

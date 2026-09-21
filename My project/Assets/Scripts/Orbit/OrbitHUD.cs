@@ -46,7 +46,9 @@ public partial class OrbitSnake
         if(pickPulse>0)Box(new Rect(0,0,Width,Height),new Color(.6f,.8f,1,pickPulse*.15f));
         // Shell: five concentric arcs top-left, lit up to the current shell; the newest one pulses for a second after a climb.
         Vector2 sc=new Vector2(78,78);
-        for(int i=0;i<ShellAltitude.Length;i++){ bool lit=i<=level; Color c=lit?(i==level&&ejectPulse>0?Color.Lerp(Lit,Color.white,Pulse(3)):Lit):Dim; Arc(sc,20+i*9,135,270,4,c); }
+        // The current shell's arc drifts from blue to orange as the Kessler clock runs, and blinks when a piece is added.
+        Color load=Color.Lerp(Lit,new Color(1,.55f,.2f),KesslerLoad); if(kesslerPulse>0)load=Color.Lerp(load,Color.white,kesslerPulse);
+        for(int i=0;i<ShellAltitude.Length;i++){ bool lit=i<=level; Color c=lit?(i==level?(ejectPulse>0?Color.Lerp(Lit,Color.white,Pulse(3)):load):Lit):Dim; Arc(sc,20+i*9,135,270,4,c); }
         // Score, digits only, top right.
         Digits(new Rect(Width-330,26,300,60),score);
         // Train pips against the quota, bottom centre. Filled pips are the segments held; past the quota they turn gold.
@@ -55,6 +57,8 @@ public partial class OrbitSnake
         if(EjectReady){ Arc(new Vector2(Width*.5f,Height-53),34+Pulse(1.5f)*4,0,360,2,new Color(.4f,1,.6f,.35f)); }
         // Skills held, bottom left, in their own colours. Armour's glyph dims once the charge is spent.
         int k=0; for(int i=0;i<SkillCount;i++){ if(!skills[i])continue; Color c=SkillColors[i]; c=new Color(Mathf.Min(1,c.r),Mathf.Min(1,c.g),Mathf.Min(1,c.b),(Skill)i==Skill.Armour&&armour==0?.3f:1); Glyph2D((Skill)i,new Rect(30+k*54,Height-84,44,44),c); k++; }
+        // Start: the shell waits under a dim wash with the enter glyph breathing over the ship. Any key goes.
+        if(!started&&!ended){ Box(new Rect(0,0,Width,Height),new Color(0,0,0,.35f)); Arc(new Vector2(Width*.5f,Height*.5f),58+Pulse(.8f)*6,0,360,3,new Color(1,1,1,.5f)); EnterGlyph(new Vector2(Width*.5f,Height*.5f+110),64,new Color(1,1,1,.45f+.45f*Pulse(1))); }
         if(paused){ Box(new Rect(0,0,Width,Height),new Color(0,0,0,.55f)); Box(new Rect(Width*.5f-34,Height*.5f-40,24,80),Ink); Box(new Rect(Width*.5f+10,Height*.5f-40,24,80),Ink); }
         if(ended)
         {

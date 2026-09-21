@@ -32,8 +32,14 @@ public partial class OrbitSnake : MonoBehaviour
     public const int SkillCount=6; public const float PodRadius=8f, WhipSpeed=1.6f, BrakeFactor=.55f, DashDistance=14f, DashTime=.25f;
     public static readonly Color[] SkillColors={new Color(1.3f,.35f,1.2f),new Color(1.2f,1.2f,1.3f),new Color(1.4f,.7f,.2f),new Color(1.3f,1.2f,.3f),new Color(.3f,1.2f,1.4f),new Color(.4f,1.3f,.5f)};
 
-    public bool paused, ended, won;
+    public bool paused, ended, won, started=true;
     public float elapsed; public int level, score, caught, strikes; public string endReason="";
+    // Kessler clock: after KesslerStart seconds on a shell, one more piece of junk appears every KesslerInterval seconds
+    // until the shell holds twice its seed count. Camping the safe shell is what the setting says already went wrong.
+    public const float KesslerStart=20f, KesslerInterval=6f; public float shellTime, lastKessler, kesslerPulse; public int kesslerSpawned;
+    public float KesslerLoad => Mathf.Clamp01((shellTime-KesslerStart)/60f);
+    // Wreckage persists: where a run dies, its train and that shell's loose segments are junk on that shell next run.
+    public static bool Persist=true; public const string WreckKey="orbit.wreck"; public const int WreckCap=30;
     public OrbitShip ship;
     public readonly List<OrbitJunk> junk=new();
     public readonly List<OrbitFalling> falling=new();
@@ -72,12 +78,13 @@ public partial class OrbitSnake : MonoBehaviour
         foreach(var a in FindObjectsByType<AudioListener>())a.enabled=false;
         world=new GameObject("Orbit / generated").transform; world.SetParent(transform,false);
         BuildArt(); BuildAudio(); BuildCamera();
-        Restart(7);
+        Restart(7,true);
     }
 
-    public void Restart(int seed)
+    // `wait` holds the world until the first key: the start screen is the frozen shell with the enter glyph over it.
+    public void Restart(int seed,bool wait=false)
     {
-        rng=new System.Random(seed);
+        rng=new System.Random(seed); started=!wait; shellTime=0; lastKessler=0; kesslerSpawned=0; kesslerPulse=0;
         // Immediate, not deferred: the checks and the screenshot runner restart several times inside one frame.
         foreach(var j in junk)DestroyImmediate(j.gameObject); junk.Clear();
         foreach(var f in falling)DestroyImmediate(f.gameObject); falling.Clear();
@@ -87,9 +94,31 @@ public partial class OrbitSnake : MonoBehaviour
         elapsed=0; level=0; score=0; caught=0; strikes=0; ended=false; won=false; paused=false; endReason=""; feed.Clear(); toast=""; toastTimer=0; ejectPulse=strikePulse=catchPulse=armourPulse=pickPulse=endTimer=0; lastEjected=0;
         ship=new GameObject("Snake").AddComponent<OrbitShip>(); ship.transform.SetParent(world);
         ship.Init(Vector3.up,Vector3.forward,ShellRadius(0)); BuildShipArt(ship);
-        SeedShell(0); ResetFx();
+        SeedShell(0); ResetFx(); if(Persist)LoadWreckage();
         Toast("LOW ORBIT — A/D to turn. Come up behind junk to catch it; hit it head-on and you lose segments.");
         SnapCamera();
+    }
+
+    // Wreckage store: "shell|nx,ny,nz,dx,dy,dz;..." in PlayerPrefs. Saved on death from the loose wreck junk on the
+    // current shell plus the train the ship died with; loaded on every restart as gold wreck junk on that shell.
+    public void SaveWreckage()
+    {
+        var sb=new System.Text.StringBuilder(); sb.Append(level).Append('|'); int n=0;
+        void Add(Vector3 nrm,Vector3 dir){ if(n>=WreckCap)return; var ic=System.Globalization.CultureInfo.InvariantCulture; sb.Append(nrm.x.ToString("R",ic)).Append(',').Append(nrm.y.ToString("R",ic)).Append(',').Append(nrm.z.ToString("R",ic)).Append(',').Append(dir.x.ToString("R",ic)).Append(',').Append(dir.y.ToString("R",ic)).Append(',').Append(dir.z.ToString("R",ic)).Append(';'); n++; }
+        for(int i=0;i<ship.segments.Count;i++){ var nrm=ship.TrailNormal((i+1)*SegmentSpacing,out var d); Add(nrm,d); }
+        foreach(var j in junk)if(j.wreck&&j.shell==level)Add(j.Normal,j.Direction);
+        PlayerPrefs.SetString(WreckKey,sb.ToString()); PlayerPrefs.Save();
+    }
+    public int LoadWreckage()
+    {
+        string s=PlayerPrefs.GetString(WreckKey,""); if(string.IsNullOrEmpty(s))return 0;
+        int bar=s.IndexOf('|'); if(bar<0||!int.TryParse(s.Substring(0,bar),out int shell))return 0; int n=0;
+        foreach(var item in s.Substring(bar+1).Split(';',System.StringSplitOptions.RemoveEmptyEntries))
+        {
+            var f=item.Split(','); if(f.Length!=6)continue; var v=new float[6]; bool ok=true; for(int i=0;i<6;i++)ok&=float.TryParse(f[i],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out v[i]); if(!ok)continue;
+            var j=SpawnJunkAt(shell,new Vector3(v[0],v[1],v[2]).normalized,new Vector3(v[3],v[4],v[5]),Speed*.7f,true); j.age=1; n++;
+        }
+        return n;
     }
 
     // Junk on random great circles of a shell. Half runs the other way round its circle so the same crossing is a catch
@@ -144,12 +173,15 @@ public partial class OrbitSnake : MonoBehaviour
 
     void FixedUpdate(){ Advance(Time.fixedDeltaTime); }
     // The pause gate. Step() itself is unconditional so the checks can drive it while the game is paused.
-    public void Advance(float dt){ if(paused)return; if(ended){endTimer+=dt;return;} Step(dt); }
+    public void Advance(float dt){ if(paused||!started)return; if(ended){endTimer+=dt;return;} Step(dt); }
 
     // One deterministic world step: the snake moves, junk advances, then contacts are resolved against this step's poses.
     public void Step(float dt)
     {
-        elapsed+=dt; ship.Simulate(dt);
+        elapsed+=dt; shellTime+=dt; ship.Simulate(dt);
+        if(shellTime>KesslerStart&&shellTime-lastKessler>=KesslerInterval&&junk.FindAll(x=>x.shell==level&&!x.shot).Count<JunkCount[Mathf.Clamp(level,0,JunkCount.Length-1)]*2)
+        { lastKessler=shellTime; kesslerSpawned++; kesslerPulse=.6f; float speed=Mathf.Lerp(JunkSpeedMin,JunkSpeedMax,(float)rng.NextDouble())*Speed*(kesslerSpawned%2==0?1:-1); var nj=SpawnJunk(level,RandomUnit(),(float)rng.NextDouble()*Mathf.PI*2,speed/ShellRadius(level),false); }
+        kesslerPulse=Mathf.Max(0,kesslerPulse-dt);
         foreach(var j in junk)j.Tick(dt);
         foreach(var p in skillPods)p.Tick(dt);
         for(int i=falling.Count-1;i>=0;i--){ falling[i].Tick(dt); if(falling[i].done){Kill(falling[i].gameObject);falling.RemoveAt(i);} }
@@ -178,7 +210,7 @@ public partial class OrbitSnake : MonoBehaviour
     void Catch(OrbitJunk j)
     {
         caught++; score+=10+5*level; catchPulse=.4f;
-        if(ship.segments.Count<MaxSegments)ship.AddSegment(); Kill(j.gameObject); Ping(1); ship.tailFlash=.3f;
+        if(ship.segments.Count<MaxSegments)ship.AddSegment(); Kill(j.gameObject); Ping(1); ship.tailFlash=.3f; Burst(j.Position,new Color(.5f,1.4f,.7f),18);
     }
 
     // A strike costs the two hindmost segments; armour eats one strike outright; with nothing left to shed the hull goes.
@@ -186,7 +218,7 @@ public partial class OrbitSnake : MonoBehaviour
     {
         Kill(j.gameObject); strikes++;
         if(armour>0){ armour=0; armourPulse=.7f; ship.grace=StrikeGrace; Ping(2); return; }
-        strikePulse=.6f; ship.shake=1; StrikeRing();
+        strikePulse=.6f; ship.shake=1; StrikeRing(); Burst(j.Position,new Color(1.5f,.35f,.2f),28);
         if(ship.segments.Count==0){ End(false,"Struck by "+(j.wreck?"your own wreckage":"debris")+" with nothing left to shed"); return; }
         ship.Shed(2); ship.grace=StrikeGrace; Toast("STRIKE — two segments lost"); Ping(0);
     }
@@ -194,7 +226,8 @@ public partial class OrbitSnake : MonoBehaviour
     public void End(bool win,string why)
     {
         if(ended)return; ended=true; won=win; endReason=why; ship.dead=!win; endTimer=0; Toast(why); Ping(win?3:0);
-        if(!win)BreakUp();
+        if(!win){ if(Persist)SaveWreckage(); BreakUp(); }
+        else if(Persist){ PlayerPrefs.DeleteKey(WreckKey); PlayerPrefs.Save(); }
     }
 
     // Space: the whole train is thrown down at the planet and burns; the recoil lifts the ship one shell. Score scales with
@@ -205,7 +238,7 @@ public partial class OrbitSnake : MonoBehaviour
         int n=ship.segments.Count; lastEjected=n;
         for(int i=0;i<n;i++){ var f=new GameObject("Falling segment").AddComponent<OrbitFalling>(); f.transform.SetParent(world); f.Init(ship.segments[i].position,i*.06f); BuildFallingArt(f); falling.Add(f); }
         ship.Shed(n); score+=EjectValue(n); ejectPulse=1.2f;
-        level++; ship.Lift(ShellRadius(level)); if(junk.FindAll(x=>x.shell==level&&!x.shot).Count==0)SeedShell(level);
+        level++; shellTime=0; lastKessler=0; kesslerSpawned=0; ship.Lift(ShellRadius(level)); if(junk.FindAll(x=>x.shell==level&&!x.shot&&!x.wreck).Count==0)SeedShell(level);
         Toast("EJECTED "+n+" — burning up below. Climbing to "+ShellNames[level]); Chime(level);
         if(level>=ShellAltitude.Length-1)End(true,"ESCAPE — you cleared the field. Score "+score); else OfferSkills();
         return true;
@@ -216,6 +249,7 @@ public partial class OrbitSnake : MonoBehaviour
     {
         if(screenshotPath!=null)
         {
+            started=true;
             if(ship.segments.Count==0&&elapsed<.1f){ for(int i=0;i<5;i++)ship.AddSegment(); skills[(int)Skill.Magnet]=true; skills[(int)Skill.Armour]=true; armour=1; OfferSkills(); }
             ship.turn=Mathf.Sin(elapsed*1.5f);
             if(!shotTaken&&elapsed>3){ ScreenCapture.CaptureScreenshot(screenshotPath); shotTaken=true; Debug.Log("[SHOT] HUD capture -> "+screenshotPath); }
@@ -223,8 +257,9 @@ public partial class OrbitSnake : MonoBehaviour
             return;
         }
         var k=Keyboard.current; if(k==null)return;
+        if(!started){ if(k.anyKey.wasPressedThisFrame&&!k.escapeKey.wasPressedThisFrame)started=true; return; }
         if(k.escapeKey.wasPressedThisFrame&&!ended)paused=!paused;
-        if(ended&&k.enterKey.wasPressedThisFrame)Restart((int)(Time.realtimeSinceStartup*1000)&0xffff);
+        if(ended&&k.enterKey.wasPressedThisFrame)Restart((int)(Time.realtimeSinceStartup*1000)&0xffff,true);
         if(paused||ended){ship.turn=0;ship.brake=false;return;}
         float turn=(k.dKey.isPressed||k.rightArrowKey.isPressed?1:0)-(k.aKey.isPressed||k.leftArrowKey.isPressed?1:0);
         var m=Mouse.current; if(m!=null&&Cursor.lockState==CursorLockMode.Locked)turn+=m.delta.ReadValue().x*.02f;
