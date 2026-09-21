@@ -645,7 +645,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
             TickAudio(0); return;
         }
         float dt=Time.deltaTime; elapsed+=dt; MatchTick(dt);
-        if(screenshotPath!=null && elapsed>4.5f){ScreenCapture.CaptureScreenshot(screenshotPath);screenshotPath=null;quitAt=elapsed+1;}
+        if(screenshotPath!=null && elapsed>4.5f)
+        {
+            ScreenCapture.CaptureScreenshot(screenshotPath);screenshotPath=null;quitAt=elapsed+1;
+        }
         if(quitAt>0 && elapsed>quitAt)Application.Quit();
         if(k!=null && phase==MatchPhase.Ended && k.enterKey.wasPressedThisFrame) RestartMatch();
         hitFlash=Mathf.Max(0,hitFlash-dt); damageFlash=Mathf.Max(0,damageFlash-dt);
