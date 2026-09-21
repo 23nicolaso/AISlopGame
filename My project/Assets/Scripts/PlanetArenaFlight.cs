@@ -99,9 +99,10 @@ public partial class ArenaPilot : MonoBehaviour
         // Periodic lift avoids a force discontinuity when angle of attack wraps at +/-180 degrees.
         float liftCoefficient=(.0009f*Mathf.Max(0,Mathf.Cos(angleOfAttack))-.002f*Mathf.Sin(2*angleOfAttack))*stall;
         Vector3 lift=liftDirection*(forwardSpeed*forwardSpeed*density*liftCoefficient);
-        Vector3 gravity=-up*AerialCombatPrototype.Gravity(transform.position);
+        // Every 10 units of cargo is +4% weight and +3% drag, capped: a full hold is the price of greed, for the AI as much as the player.
+        Vector3 gravity=-up*(AerialCombatPrototype.Gravity(transform.position)*(1+Mathf.Min(.6f,cargo*.004f)));
         Vector3 thrust=f*(throttle*12+(burner?28:0));
-        Vector3 drag=-velocity*speed*(.00115f*density+.00004f);
+        Vector3 drag=-velocity*speed*((.00115f*density+.00004f)*(1+Mathf.Min(.45f,cargo*.003f)));
         velocity+=(gravity+thrust+drag+lift)*dt;
         // Aerodynamic sideslip damping redirects momentum without snapping the position or speed.
         float align=Mathf.Clamp01(dt*density*1.5f*stall);
@@ -180,12 +181,12 @@ public class CaptureGate : MonoBehaviour
     public LineRenderer ring, progressRing;
     public Renderer core;
     MaterialPropertyBlock colors;
-    public float ownerAge;
+    public float ownerAge, payoutFlash;
     void FixedUpdate() { Tick(Time.fixedDeltaTime); }
     public void Tick(float dt)
     {
-        var g=AerialCombatPrototype.I; if(!g || g.paused) return;
-        ArenaPilot occupant=null; int count=0; ownerAge+=dt;
+        var g=AerialCombatPrototype.I; if(!g || g.paused || !g.MatchActive) return;
+        ArenaPilot occupant=null; int count=0;
         foreach(var p in g.pilots)
         {
             bool inside=p.Alive && Vector3.Distance(p.transform.position,transform.position)<Radius;
@@ -207,8 +208,17 @@ public class CaptureGate : MonoBehaviour
             }
         }
         else if(count==0) progress=Mathf.Max(0,progress-dt*.6f);
+        // Holding a refinery is an income stream, not a one-off bonus: 5 points every 12 s straight into banked score.
+        if(owner>=0)
+        {
+            ownerAge+=dt;
+            if(ownerAge>=12){ownerAge-=12;if(owner<g.pilots.Count)g.pilots[owner].score+=5;payoutFlash=.4f;}
+        }
+        else ownerAge=0;
+        payoutFlash=Mathf.Max(0,payoutFlash-dt);
         // Two or more competing pilots contest the zone: progress and banking stop.
         Color color=count>1?new Color(1,.18f,.08f):owner==0?new Color(.1f,1,.8f):owner<0?new Color(.1f,.7f,1):new Color(1,.35f,.13f);
+        if(payoutFlash>0)color=Color.Lerp(color,new Color(2.4f,2.4f,2.2f),payoutFlash/.4f);
         if(colors==null)colors=new MaterialPropertyBlock();
         colors.SetColor("_BaseColor",color);
         if(ring)ring.SetPropertyBlock(colors);
