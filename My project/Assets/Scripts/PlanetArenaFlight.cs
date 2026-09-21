@@ -250,13 +250,17 @@ public class CaptureGate : MonoBehaviour
                 if(owner!=occupant.id)
                 {
                     owner=occupant.id; ownerAge=0; occupant.score+=25;
+                    g.Toast("REFINERY "+(index+1)+"  CLAIMED  +25",occupant==g.player?new Color(.16f,1,.85f):new Color(1,.45f,.18f));
+                    if(occupant==g.player)g.bankPop=.18f;
                 }
                 // The ace refines at a premium: the mark is worth holding onto, which is what makes hunting it worth the risk.
                 // An overcharged refinery doubles on top of that, which is what drags the whole field onto one point.
                 if(occupant.cargo>0)
                 {
                     float rate=(g.aceId==occupant.id?1.5f:1)*(overcharge>0?2:1);
-                    occupant.score+=Mathf.RoundToInt(occupant.cargo*rate);occupant.cargo=0;
+                    int banked=Mathf.RoundToInt(occupant.cargo*rate);
+                    occupant.score+=banked;occupant.cargo=0;
+                    if(occupant==g.player){g.Toast("+"+banked+"  BANKED",new Color(.16f,1,.85f));g.bankPop=.18f;}
                 }
                 occupant.health=Mathf.Min(100,occupant.health+dt*10);
             }
@@ -296,11 +300,17 @@ public class ArenaBolt : MonoBehaviour
     public Vector3 velocity;
     public bool seeker;
     float life=3;
-    bool spent;
+    bool spent,chasedResolved;
+    ArenaPilot chased;
+    // A round that shaves the hull inside 1.4 m of its swept segment is a marksman's shot, and pays 1.75x for it.
+    public const float PreciseRadius=1.4f,PreciseMultiplier=1.75f;
     public static float SegmentDistance(Vector3 p,Vector3 a,Vector3 b)
     {
         Vector3 d=b-a; return Vector3.Distance(p,a+d*Mathf.Clamp01(Vector3.Dot(p-a,d)/Mathf.Max(.0001f,d.sqrMagnitude)));
     }
+    // The missile warning needs the live set every fixed step; registering here covers bolts the harness builds by hand too.
+    void OnEnable() { var g=AerialCombatPrototype.I; if(g && !g.bolts.Contains(this)) g.bolts.Add(this); }
+    void OnDestroy() { var g=AerialCombatPrototype.I; if(g) g.bolts.Remove(this); }
     void FixedUpdate() { Tick(Time.fixedDeltaTime); }
     public void Tick(float dt)
     {
@@ -308,18 +318,27 @@ public class ArenaBolt : MonoBehaviour
         var g=AerialCombatPrototype.I; if(!g){Destroy(gameObject);return;} if(g.paused)return;
         life-=dt;
         if(life<=0){spent=true;Destroy(gameObject);return;}
-        if(seeker && target) velocity=Vector3.RotateTowards(velocity.normalized,(target.position-transform.position).normalized,dt*2.3f,0)*260;
+        if(seeker && target)
+        {
+            if(!chasedResolved){chased=target.GetComponent<ArenaPilot>();chasedResolved=true;}
+            // Burner-jinking cuts the seeker's authority from 2.3 to 1.2 rad/s: boost is the counter-play, so no new key is needed.
+            float turn=chased && chased.boost?1.2f:2.3f;
+            velocity=Vector3.RotateTowards(velocity.normalized,(target.position-transform.position).normalized,dt*turn,0)*260;
+        }
         Vector3 a=transform.position,b=a+velocity*dt;
         transform.position=b;transform.rotation=Quaternion.LookRotation(velocity);
         if(!g.VisibleBetween(a,b)){spent=true;Destroy(gameObject);return;}
         // Resolve nearest intersection along the movement segment, avoiding frame-rate tunneling.
-        float nearest=float.MaxValue; ArenaPilot pilot=null; SalvageCore core=null;
+        float nearest=float.MaxValue,miss=0; ArenaPilot pilot=null; SalvageCore core=null;
+        Vector3 heading=velocity.normalized;
         foreach(var p in g.pilots)
         {
             if(p==owner || !p.Alive || p.invulnerable>0)continue;
-            float along=Vector3.Dot(p.transform.position-a,velocity.normalized);
+            float along=Vector3.Dot(p.transform.position-a,heading);
             if(along>=-5 && along<nearest && SegmentDistance(p.transform.position,a,b)<4)
-            {nearest=along;pilot=p;core=null;}
+            // The hit still comes off the swept segment, but precision is judged on the line of flight: a 7.2 m step
+            // must never be what decides whether a shot counted as good, only whether it connected at all.
+            {nearest=along;pilot=p;core=null;miss=Vector3.Distance(p.transform.position,a+heading*along);}
         }
         foreach(var c in g.cores)
         {
@@ -328,7 +347,12 @@ public class ArenaBolt : MonoBehaviour
             if(along>=-9 && along<nearest && SegmentDistance(c.transform.position,a,b)<9)
             {nearest=along;core=c;pilot=null;}
         }
-        if(pilot){spent=true;g.Damage(pilot,seeker?60:12,owner);Destroy(gameObject);}
+        if(pilot)
+        {
+            spent=true;bool precise=miss<PreciseRadius;
+            g.Damage(pilot,(seeker?60:12)*(precise?PreciseMultiplier:1),owner,precise);
+            Destroy(gameObject);
+        }
         else if(core){spent=true;core.Hit(seeker?80:18,owner,seeker);Destroy(gameObject);}
     }
 }

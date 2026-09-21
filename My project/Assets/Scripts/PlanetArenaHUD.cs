@@ -8,6 +8,84 @@ public partial class AerialCombatPrototype
     readonly List<ArenaPilot> standings=new List<ArenaPilot>();
     float standingsRefresh;
     const float Width=1280,Height=720;
+    // One row of the event feed. A struct in a plain list: the feed is at most four entries, so nothing here is worth an object.
+    public struct ToastRow { public string text; public Color color; public float life,age; }
+    public const float ToastLife=3;
+    public const int ToastRows=4;
+    public readonly List<ToastRow> toasts=new List<ToastRow>();
+    // Purely-visual timers, all on unscaled time: number pops, the hitmarker kick, the acquisition snap.
+    public float cargoPop,bankPop,hitPop,hitGold,preciseTag,targetLock;
+    // The reticle's lock, resolved once per frame in Update because OnGUI runs twice and must never pick a target itself.
+    public Transform hudTarget;
+    public Vector3 hudTargetVelocity;
+    // Nearest live seeker that has the player as its target: -1 when nothing is inbound.
+    public float missileRange=-1,missileBeep;
+    public Vector3 missileSource;
+    public bool overheated;
+    // Comfort settings, persisted in PlayerPrefs and edited from the pause overlay.
+    public float shakeScale=.8f;
+    public bool reduceFlashing,reduceCameraMotion;
+    public int accessRow;
+    public void LoadComfort()
+    {
+        shakeScale=Mathf.Clamp01(PlayerPrefs.GetFloat("rift.shake",.8f));
+        reduceFlashing=PlayerPrefs.GetInt("rift.reduceFlashing",0)==1;
+        reduceCameraMotion=PlayerPrefs.GetInt("rift.reduceMotion",0)==1;
+    }
+    public void SaveComfort()
+    {
+        PlayerPrefs.SetFloat("rift.shake",shakeScale);
+        PlayerPrefs.SetInt("rift.reduceFlashing",reduceFlashing?1:0);
+        PlayerPrefs.SetInt("rift.reduceMotion",reduceCameraMotion?1:0);
+        PlayerPrefs.Save();
+    }
+    // Newest first, oldest pushed off the bottom: a feed that grows past four rows stops being readable in a dogfight.
+    public void Toast(string text,Color c)
+    {
+        toasts.Insert(0,new ToastRow{text=text,color=c,life=ToastLife,age=0});
+        while(toasts.Count>ToastRows)toasts.RemoveAt(toasts.Count-1);
+    }
+    // Every HUD-only timer in one dt method so the verification harness can advance the feed without a frame.
+    public void TickHud(float dt)
+    {
+        for(int i=toasts.Count-1;i>=0;i--)
+        {
+            var t=toasts[i];t.life-=dt;t.age+=dt;
+            if(t.life<=0)toasts.RemoveAt(i);else toasts[i]=t;
+        }
+        cargoPop=Mathf.Max(0,cargoPop-dt);bankPop=Mathf.Max(0,bankPop-dt);
+        hitPop=Mathf.Max(0,hitPop-dt);hitGold=Mathf.Max(0,hitGold-dt);
+        preciseTag=Mathf.Max(0,preciseTag-dt);targetLock=Mathf.Max(0,targetLock-dt);
+    }
+    // Landed-hit confirmation, player-only: the crosshair kicks, and a precise pass gilds it and prints the multiplier.
+    public void Hitmarker(bool precise)
+    {
+        hitPop=.12f;
+        if(precise){hitGold=.4f;preciseTag=.4f;}
+    }
+    // Runs on the simulation clock from FixedUpdate: the tone has to repeat at a rate, and a rate needs a real dt.
+    public void MissileTick(float dt)
+    {
+        missileRange=-1;
+        if(player && player.Alive && MatchActive)
+        {
+            float best=float.MaxValue;
+            foreach(var b in bolts)
+            {
+                if(!b || !b.seeker || b.target!=player.transform)continue;
+                float d=Vector3.Distance(b.transform.position,player.transform.position);
+                if(d<best){best=d;missileSource=b.transform.position;}
+            }
+            if(best<float.MaxValue)missileRange=best;
+        }
+        if(missileRange<0){missileBeep=0;return;}
+        // 1.0 s of spacing at 600 m down to .12 s at 40 m: the ear reads the range without ever reading the number.
+        float interval=Mathf.Lerp(.12f,1f,Mathf.Clamp01((missileRange-40)/560));
+        missileBeep-=dt;
+        if(missileBeep<=0){missileBeep=interval;if(audioSource)audioSource.PlayOneShot(missileTone,.5f);}
+    }
+    // Back-out ease: 1.25x on the frame the number changes, a shallow undershoot, then home inside .18 s.
+    float Pop(float timer){ if(timer<=0)return 1; float t=1-Mathf.Clamp01(timer/.18f); return 1+.25f*(1-t)*Mathf.Cos(t*Mathf.PI*1.5f); }
     void Styles()
     {
         if(stylesReady)return;
@@ -25,22 +103,99 @@ public partial class AerialCombatPrototype
         stylesReady=true;
     }
     // Chevron on a ring around the crosshair; the bearing is taken in camera space so it points where the eye looks.
-    void HitWedge(float bearing,float alpha)
+    void HitWedge(float bearing,float alpha){ HitWedge(bearing,alpha,new Color(1,.17f,.09f)); }
+    void HitWedge(float bearing,float alpha,Color hue)
     {
         Vector2 c=new Vector2(Width*.5f,Height*.5f);
         Vector2 d=new Vector2(Mathf.Sin(bearing),-Mathf.Cos(bearing)),n=new Vector2(-d.y,d.x);
-        Color col=new Color(1,.17f,.09f,alpha);
+        Color col=new Color(hue.r,hue.g,hue.b,alpha);
         Vector2 tip=c+d*172,left=c+d*130-n*36,rightEdge=c+d*130+n*36;
         Line(left,tip,col,3);Line(tip,rightEdge,col,3);
-        Line(c+d*118-n*20,c+d*146,new Color(1,.3f,.16f,alpha*.5f),2);
-        Line(c+d*146,c+d*118+n*20,new Color(1,.3f,.16f,alpha*.5f),2);
+        Color inner=new Color(Mathf.Min(1,hue.r+.13f),Mathf.Min(1,hue.g+.13f),Mathf.Min(1,hue.b+.07f),alpha*.5f);
+        Line(c+d*118-n*20,c+d*146,inner,2);
+        Line(c+d*146,c+d*118+n*20,inner,2);
     }
     // Warnings stack upward from a single slot, so three of them at once never print on top of each other.
     void Warning(ref int slot,string text,Color c)
     {
         float y=Height-170-slot*33;slot++;
-        GUI.color=new Color(c.r,c.g,c.b,.6f+.4f*Mathf.Sin(Time.unscaledTime*7));
+        GUI.color=new Color(c.r,c.g,c.b,reduceFlashing?.92f:.6f+.4f*Mathf.Sin(Time.unscaledTime*7));
         Text(new Rect(530,y,300,28),text,normal);GUI.color=Color.white;
+    }
+    // Event feed under the rankings and clear of the kill banner, which ends at y=331. Four rows of 30 reach y=460,
+    // well above the radar at y=527: the right column stays a single column with nothing stacked on anything.
+    void ToastFeed()
+    {
+        for(int i=0;i<toasts.Count;i++)
+        {
+            var t=toasts[i];
+            // Ease-out cubic slide from 268 px off the right edge over .18 s; fade only over the last half second of life.
+            float enter=Mathf.Clamp01(t.age/.18f),slide=1-Mathf.Pow(1-enter,3);
+            float x=1010+(1-slide)*268,a=Mathf.Clamp01(t.life/.5f),y=340+i*30;
+            Box(new Rect(x,y,250,26),new Color(.01f,.025f,.045f,.72f*a));
+            Line(new Vector2(x+1,y),new Vector2(x+1,y+26),new Color(t.color.r,t.color.g,t.color.b,a),3);
+            GUI.color=new Color(t.color.r,t.color.g,t.color.b,a);
+            Text(new Rect(x+13,y+3,232,20),t.text,small);
+            GUI.color=Color.white;
+        }
+    }
+    // The one thing the reticle is locked onto gets a full read: brackets, hull state, callsign, range.
+    void TargetBox(Transform t,Vector2 bore)
+    {
+        bool visible;Vector2 v=Project(t.position,out visible);
+        var foe=t.GetComponent<ArenaPilot>();var wreck=t.GetComponent<SalvageCore>();
+        float distance=Vector3.Distance(player.transform.position,t.position);
+        Color c=foe?new Color(1,.45f,.18f):wreck && wreck.kind==CoreKind.Volatile?new Color(.78f,.38f,1):wreck && wreck.kind==CoreKind.Armored?new Color(.81f,.87f,.95f):new Color(1,.74f,.18f);
+        if(visible)
+        {
+            // Sized on range: a 40 m pass frames the whole hull at 55 px, a 600 m speck still reads as a 15 px box.
+            float half=Mathf.Clamp(2200/Mathf.Max(40,distance),15,55);
+            // Acquisition snap: 1.4x down to 1x over .15 s, so a new lock is felt instead of merely appearing.
+            half*=Mathf.Lerp(1,1.4f,Mathf.Clamp01(targetLock/.15f));
+            float arm=half*.42f;
+            for(int q=0;q<4;q++)
+            {
+                Vector2 d=new Vector2(q==0||q==3?-1:1,q<2?-1:1);
+                Vector2 corner=v+new Vector2(d.x*half,d.y*half);
+                Line(corner,corner-new Vector2(d.x*arm,0),c,2);
+                Line(corner,corner-new Vector2(0,d.y*arm),c,2);
+            }
+            float fraction=foe?Mathf.Clamp01(foe.health/100):wreck?Mathf.Clamp01(wreck.health/Mathf.Max(1,wreck.maxHealth)):0;
+            float barY=v.y+half+8;
+            Box(new Rect(v.x-22,barY,44,4),new Color(.09f,.11f,.14f,.85f));
+            Box(new Rect(v.x-22,barY,44*fraction,4),foe?new Color(1,.32f,.13f):c);
+            string label=foe?foe.callsign.ToUpper():wreck?(wreck.kind==CoreKind.Volatile?"VOLATILE WRECK":wreck.kind==CoreKind.Armored?"ARMORED WRECK":"SALVAGE WRECK"):"TARGET";
+            GUI.color=c;
+            Text(new Rect(v.x-90,barY+6,180,18),label+"   "+Mathf.RoundToInt(distance)+" m",centered);
+            GUI.color=Color.white;
+        }
+        Vector3 lead=InterceptPoint(player,t.position,hudTargetVelocity,360);
+        Vector2 l=Project(lead,out visible);
+        if(visible){Ring2D(l,6,new Color(1,.74f,.18f));Line(bore,l,new Color(1,.75f,.2f,.4f));}
+    }
+    // Three rows a player can reach from the keyboard mid-match: the only settings that change what the eyes have to take.
+    void ComfortPanel()
+    {
+        float x=470,y=392,w=340,h=140;
+        Box(new Rect(x,y,w,h),new Color(.012f,.03f,.055f,.95f));
+        Line(new Vector2(x,y),new Vector2(x+w,y),new Color(.16f,.88f,1,.75f),2);
+        GUI.color=new Color(.63f,.83f,.9f,.72f);
+        Text(new Rect(x+20,y+7,w-40,18),"COMFORT",small);
+        GUI.color=Color.white;
+        string[] labels={"SHAKE","REDUCE FLASHING","REDUCE CAMERA MOTION"};
+        string[] values={Mathf.RoundToInt(shakeScale*100)+"%",reduceFlashing?"ON":"OFF",reduceCameraMotion?"ON":"OFF"};
+        for(int i=0;i<3;i++)
+        {
+            float ry=y+30+i*31;bool on=i==accessRow;
+            if(on)Box(new Rect(x+10,ry-2,w-20,27),new Color(.08f,.5f,.6f,.34f));
+            GUI.color=on?Color.white:new Color(.63f,.83f,.9f,.78f);
+            Text(new Rect(x+20,ry,236,23),(on?"> ":"   ")+labels[i],small);
+            Text(new Rect(x+w-124,ry-1,100,23),values[i],right);
+            GUI.color=Color.white;
+        }
+        GUI.color=new Color(.63f,.83f,.9f,.55f);
+        Text(new Rect(x,y+h-24,w,18),"UP DOWN select   LEFT RIGHT adjust   1 2 3 jump",centered);
+        GUI.color=Color.white;
     }
     void KillBanner()
     {
@@ -251,6 +406,7 @@ public partial class AerialCombatPrototype
             Text(new Rect(1188,y,54,22),p.score.ToString(),right);GUI.color=Color.white;
         }
         KillBanner();
+        ToastFeed();
 
         Box(new Rect(20,Height-108,885,88),new Color(.01f,.025f,.045f,.82f));
         Text(new Rect(36,Height-96,180,26),Mathf.RoundToInt(player.Speed*3.6f)+"  km/h",normal);
@@ -272,8 +428,11 @@ public partial class AerialCombatPrototype
         // A full hold is a flight-model penalty, so the readout has to warn before the handling does.
         bool heavy=player.cargo>=60;
         GUI.color=heavy?goldColor:Color.white;
+        // Every pickup strikes the number rather than sliding it: a local TRS around the label's own left edge.
+        Matrix4x4 beforePop=GUI.matrix;float cargoScale=Pop(cargoPop);
+        if(cargoPop>0)GUI.matrix=beforePop*Matrix4x4.TRS(new Vector3(499,Height-84,0),Quaternion.identity,new Vector3(cargoScale,cargoScale,1))*Matrix4x4.Translate(new Vector3(-499,-(Height-84),0));
         Text(new Rect(495,Height-96,180,26),"CARGO "+player.cargo,normal);
-        GUI.color=Color.white;
+        GUI.matrix=beforePop;GUI.color=Color.white;
         if(heavy)
         {
             float pulse=.5f+.5f*Mathf.Sin(Time.unscaledTime*6);
@@ -281,10 +440,21 @@ public partial class AerialCombatPrototype
             GUI.color=new Color(1,.84f,.35f,.6f+pulse*.4f);
             Text(new Rect(598,Height-94,60,20),"HEAVY",small);GUI.color=Color.white;
         }
+        float bankScale=Pop(bankPop);
+        if(bankPop>0)GUI.matrix=beforePop*Matrix4x4.TRS(new Vector3(499,Height-52,0),Quaternion.identity,new Vector3(bankScale,bankScale,1))*Matrix4x4.Translate(new Vector3(-499,-(Height-52),0));
         Text(new Rect(495,Height-64,180,24),"BANKED "+player.score,small);
+        GUI.matrix=beforePop;
         Text(new Rect(681,Height-96,190,26),player.seekerCooldown>0?"SEEKER "+player.seekerCooldown.ToString("0.0")+"s":"SEEKER READY",small);
+        // Above .92 the cannon is locked out, so the bar stops reading as remaining capacity and fills solid red instead.
+        bool cooked=player.heat>.92f;
+        float heatPulse=reduceFlashing?.5f:.5f+.5f*Mathf.Sin(Time.unscaledTime*12);
         Box(new Rect(685,Height-55,175,5),new Color(.2f,.25f,.3f));
-        Box(new Rect(685,Height-55,175*(1-player.heat),5),cyan);
+        Box(new Rect(685,Height-55,cooked?175:175*(1-player.heat),5),cooked?Color.Lerp(new Color(1,.25f,.1f),new Color(2.2f,.72f,.3f),heatPulse):cyan);
+        if(cooked)
+        {
+            GUI.color=new Color(1,.44f,.2f,reduceFlashing?.92f:.55f+.45f*heatPulse);
+            Text(new Rect(685,Height-96,175,26),"OVERHEAT",right);GUI.color=Color.white;
+        }
 
         // Radar uses the aircraft frame and includes targets behind the camera.
         Vector2 radar=new Vector2(1170,600);Ring2D(radar,73,new Color(.3f,.6f,.7f,.6f));Ring2D(radar,36,new Color(.3f,.6f,.7f,.3f));
@@ -301,13 +471,16 @@ public partial class AerialCombatPrototype
         var gate=NearestGate(player.transform.position);if(gate)NavMarker(gate.transform.position,cyan,true);
         var core=NearestCore(player.transform.position);if(core)NavMarker(core.transform.position,goldColor,false);
         var surge=OverchargedGate();if(surge)SurgeMarker(surge);
+        // Everything not locked stays a dim pair of ticks: the full box below is reserved for the one target that matters.
         foreach(var p in pilots)
         {
-            if(p==player || !p.Alive || Vector3.Distance(p.transform.position,player.transform.position)>800 || !VisibleBetween(player.transform.position,p.transform.position))continue;
+            if(p==player || !p.Alive || hudTarget==p.transform || Vector3.Distance(p.transform.position,player.transform.position)>800 || !VisibleBetween(player.transform.position,p.transform.position))continue;
             bool visible;Vector2 v=Project(p.transform.position,out visible);if(!visible)continue;
-            Line(v+new Vector2(-10,-8),v+new Vector2(-10,8),orange);
-            Line(v+new Vector2(10,-8),v+new Vector2(10,8),orange);
+            Line(v+new Vector2(-10,-8),v+new Vector2(-10,8),new Color(orange.r,orange.g,orange.b,.5f));
+            Line(v+new Vector2(10,-8),v+new Vector2(10,8),new Color(orange.r,orange.g,orange.b,.5f));
+            GUI.color=new Color(1,1,1,.6f);
             Text(new Rect(v.x+14,v.y-10,150,20),p.callsign,small);
+            GUI.color=Color.white;
         }
         if(player.Alive)
         {
@@ -319,15 +492,25 @@ public partial class AerialCombatPrototype
                 Ring2D(stickTip,5,new Color(.8f,.95f,1,.8f));
             }
             bool visible;Vector2 bore=Project(player.transform.position+player.transform.forward*350,out visible);
-            Color c=hitFlash>0?Color.white:cyan;
+            // Locked-out weapons turn the whole reticle red; a landed hit whitens it, and reduced flashing keeps that gentle.
+            Color c=cooked?new Color(1,.3f,.13f):hitFlash>0?(reduceFlashing?Color.Lerp(cyan,Color.white,.35f):Color.white):cyan;
             Ring2D(bore,17,c);Box(new Rect(bore.x-1,bore.y-1,3,3),c);
-            Vector3 targetVelocity;Transform target=AimTarget(player,6,out targetVelocity);
-            if(target)
+            // Four corner ticks kick 6 px outward on a landed hit and ease home over .12 s: the confirmation lives on the crosshair.
+            float kick=hitPop>0?6*Mathf.Pow(hitPop/.12f,.6f):0;
+            Color tickColor=hitGold>0?new Color(1,.82f,.28f):c;
+            for(int q=0;q<4;q++)
             {
-                Vector3 lead=InterceptPoint(player,target.position,targetVelocity,360);
-                Vector2 t=Project(lead,out visible);if(visible){Ring2D(t,6,goldColor);Line(bore,t,new Color(1,.75f,.2f,.4f));}
+                Vector2 d=new Vector2(q==0||q==3?-1:1,q<2?-1:1);
+                Line(bore+d*(11+kick),bore+d*(20+kick),tickColor,2);
             }
+            if(preciseTag>0)
+            {
+                GUI.color=new Color(1,.85f,.3f,Mathf.Clamp01(preciseTag/.2f));
+                Text(new Rect(bore.x+26,bore.y-36,90,20),"x1.75",small);GUI.color=Color.white;
+            }
+            if(hudTarget)TargetBox(hudTarget,bore);
             int warning=0;
+            if(cooked)Warning(ref warning,"OVERHEAT",new Color(1,.3f,.12f));
             if(player.Speed<45 && player.Altitude<500)Warning(ref warning,"STALL",new Color(1,.85f,.4f));
             if(player.Altitude<40)Warning(ref warning,"PULL UP",new Color(1,.34f,.18f));
             if(player.hullHeat>1)Warning(ref warning,"RE-ENTRY",new Color(1,.46f,.1f));
@@ -336,7 +519,17 @@ public partial class AerialCombatPrototype
                 Vector3 local=cam.transform.InverseTransformDirection(lastAttackDirection);
                 HitWedge(Mathf.Atan2(local.x,local.z),Mathf.Clamp01(lastAttackAge));
             }
-            if(damageFlash>0)Box(new Rect(0,0,Width,Height),new Color(1,.03f,.01f,damageFlash*.4f));
+            // Inbound seeker: its own hot-magenta chevron so it never reads as the ordinary "you were shot from there" wedge.
+            if(missileRange>=0)
+            {
+                Vector3 local=cam.transform.InverseTransformDirection(missileSource-player.transform.position);
+                float flash=reduceFlashing?.92f:.45f+.55f*Mathf.Sin(Time.unscaledTime*11);
+                if(local.sqrMagnitude>.01f)HitWedge(Mathf.Atan2(local.x,local.z),flash,new Color(1,.12f,.5f));
+                GUI.color=new Color(1,.24f,.52f,flash);
+                Text(new Rect(Width*.5f-150,114,300,26),"MISSILE   "+Mathf.RoundToInt(missileRange)+" m",banner);
+                GUI.color=Color.white;
+            }
+            if(damageFlash>0)Box(new Rect(0,0,Width,Height),new Color(1,.03f,.01f,reduceFlashing?.12f:damageFlash*.4f));
         }
         else
         {
@@ -347,6 +540,6 @@ public partial class AerialCombatPrototype
             Text(new Rect(30,110,975,30),"Mouse: pitch / bank   C: center   WASD: pitch / bank   QE: rudder   Shift / Ctrl: throttle   Space: boost   LMB: cannon   RMB: seeker",small);
         if(phase==MatchPhase.Countdown)CountdownCard();
         else if(phase==MatchPhase.Ended)ResultsPanel();
-        if(paused)Text(new Rect(500,340,320,44),"PAUSED  /  ESC",title);
+        if(paused){Text(new Rect(500,340,320,44),"PAUSED  /  ESC",title);ComfortPanel();}
     }
 }

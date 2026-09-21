@@ -19,6 +19,34 @@ public static class RiftCombatVerification
         pilot.velocity=rotation*Vector3.forward*82;pilot.health=100;pilot.invulnerable=0;pilot.cargo=0;
         pilot.ResetFlight();
     }
+    // Hand-built cannon round flown straight past a parked victim, `offset` metres off its centre: the only way to
+    // measure the precision multiplier without also measuring the AI's aim.
+    static float ProbeBolt(ArenaPilot shooter,ArenaPilot victim,float offset)
+    {
+        ClearBolts();
+        victim.health=100;victim.invulnerable=0;
+        var go=new GameObject("probe bolt");
+        go.transform.position=victim.transform.position+new Vector3(offset,0,-30);
+        var bolt=go.AddComponent<ArenaBolt>();
+        bolt.owner=shooter;bolt.velocity=new Vector3(0,0,360);
+        for(int i=0;i<12 && victim.health>=100;i++)bolt.Tick(.02f);
+        float dealt=100-victim.health;ClearBolts();return dealt;
+    }
+    // One 20 ms step of a seeker launched 45 degrees off the bearing to its target: the angle it recovers IS the turn rate.
+    static float SeekerTurn(AerialCombatPrototype g,ArenaPilot chased,bool boosting)
+    {
+        ClearBolts();
+        chased.boost=boosting;
+        var go=new GameObject("probe seeker");
+        go.transform.position=chased.transform.position-new Vector3(0,0,300);
+        var bolt=go.AddComponent<ArenaBolt>();
+        bolt.owner=g.pilots[2];bolt.seeker=true;bolt.target=chased.transform;
+        bolt.velocity=Quaternion.AngleAxis(45,Vector3.up)*new Vector3(0,0,260);
+        Vector3 before=bolt.velocity;
+        bolt.Tick(.02f);
+        float turned=Vector3.Angle(before,bolt.velocity);
+        chased.boost=false;ClearBolts();return turned;
+    }
     [MenuItem("Rift/Verify flip stability and rival combat")]
     public static void Verify() { Debug.Log(Run()); }
     public static string Run()
@@ -134,6 +162,17 @@ public static class RiftCombatVerification
             Check(Mathf.Abs(p.health-(100-SalvageCore.BlastDamage))<.01f,"Volatile detonation damages pilots inside 45 m");
             Check(Mathf.Abs(bot.health-100)<.01f,"Volatile detonation spares pilots outside the blast");
 
+            // Precision: the same cannon round, the same parked target, 1.0 m off the hull against 3.0 m. Both land
+            // (the pilot radius is 4 m); only the close one is inside the 1.4 m marksman band and it must pay 1.75x.
+            foreach(var other in g.pilots)Place(other,new Vector3((other.id+1)*3000,3000,0),Quaternion.identity);
+            Place(p,new Vector3(0,3000,0),Quaternion.identity);
+            float grazeDamage=ProbeBolt(bot,p,1f),wideDamage=ProbeBolt(bot,p,3f);
+            Check(wideDamage>0 && Mathf.Abs(grazeDamage-wideDamage*ArenaBolt.PreciseMultiplier)<.01f,"A hit inside 1.4 m of the hull pays 1.75x");
+            // Counter-play with no new key: a boosting target halves what the seeker can turn in one step.
+            p.health=100;p.invulnerable=0;
+            float coldTurn=SeekerTurn(g,p,false),burnerTurn=SeekerTurn(g,p,true);
+            Check(coldTurn>2 && Mathf.Abs(burnerTurn/coldTurn-1.2f/2.3f)<.03f,"Boost halves the seeker's turn rate");
+
             // Three unanswered kills crowns an ace; dying hands the mark back to nobody.
             g.aceId=-1;foreach(var pilot in g.pilots){pilot.streak=0;pilot.cargo=0;}
             for(int i=2;i<=4;i++){var prey=g.pilots[i];prey.health=100;prey.invulnerable=0;g.Kill(prey,bot);}
@@ -141,7 +180,7 @@ public static class RiftCombatVerification
             bot.health=100;bot.invulnerable=0;g.Kill(bot,g.pilots[5]);
             Check(g.aceId==-1 && bot.streak==0,"Killing the ace clears the bounty");
 
-            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; ace bounty crowning and clearing. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1");
+            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; precision 1.75x band; boost halves seeker turn rate; ace bounty crowning and clearing. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1")+", graze damage="+grazeDamage.ToString("F2")+" vs wide="+wideDamage.ToString("F2")+", seeker turn cold="+coldTurn.ToString("F2")+" deg vs burner="+burnerTurn.ToString("F2")+" deg";
         }
         finally
         {

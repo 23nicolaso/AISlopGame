@@ -64,6 +64,7 @@ public partial class AerialCombatPrototype
         var pick=surgeCandidates[Random.Range(0,surgeCandidates.Count)];
         pick.overcharge=OverchargeLength;
         Banner("OVERCHARGE   REFINERY "+(pick.index+1));
+        Toast("OVERCHARGE  REFINERY "+(pick.index+1),new Color(.82f,.44f,1));
         Feedback("large",pick.transform.position);
         return true;
     }
@@ -82,6 +83,9 @@ public partial class AerialCombatPrototype
         shards.Clear();
         foreach(var core in cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}
         elapsed=0;bannerTimer=0;damageFlash=0;lastAttackAge=0;shake=0;aceId=-1;bountyFresh=0;
+        // The information layer is board state too: a restart that kept last match's feed would open on somebody else's kills.
+        toasts.Clear();cargoPop=0;bankPop=0;hitPop=0;hitGold=0;preciseTag=0;targetLock=0;hudTarget=null;
+        missileRange=-1;missileBeep=0;overheated=false;
         phase=MatchPhase.Countdown;phaseTimer=0;overchargeTimer=0;heartbeatMark=-1;
     }
 }

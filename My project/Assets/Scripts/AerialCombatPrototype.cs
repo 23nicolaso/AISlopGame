@@ -13,6 +13,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public readonly List<SalvageCore> cores = new List<SalvageCore>();
     public readonly List<SalvageShard> shards = new List<SalvageShard>();
     public readonly List<CaptureGate> gates = new List<CaptureGate>();
+    // Live projectiles, registered by the bolt itself: the missile warning has to scan them every fixed step.
+    public readonly List<ArenaBolt> bolts = new List<ArenaBolt>();
     public ArenaPilot player;
     // Whoever is on a three-kill run. The whole field weights its target scoring toward this id, so the leader
     // gets hunted without any explicit difficulty dial, and a trailing pilot gets a way back in by taking the mark.
@@ -33,7 +35,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     readonly List<Object> owned = new List<Object>();
     Material alloy, dark, teal, red, gold, white, violet, slate, pillarMaterial;
     AudioSource audioSource, engineSource;
-    AudioClip gunSound, hitSound, boomSound, collectSound;
+    AudioClip gunSound, hitSound, boomSound, collectSound, missileTone, overheatHiss;
     Quaternion cameraRotation;
     Vector3 sunDirection=Vector3.up;
     // 14 m instead of 20: the aircraft has to own a sixth of the frame width, or nothing in the world has a readable scale.
@@ -63,6 +65,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         if(I && I!=this) { Destroy(gameObject); return; }
         I=this;
         Application.runInBackground=true;
+        LoadComfort();
         foreach(var c in FindObjectsByType<Camera>()) c.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>()) a.enabled=false;
         foreach(var l in FindObjectsByType<Light>()) l.enabled=false;
@@ -102,6 +105,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
         hitSound=Sound("Armor impact",.16f,220,55,.35f);
         boomSound=Sound("Ship breakup",.7f,75,18,.6f);
         collectSound=Sound("Salvage acquired",.2f,500,1000,.03f);
+        // A short falling pip that cannot be mistaken for the cannon, and a wide hiss for the weapon bay venting.
+        missileTone=Sound("Seeker lock pip",.08f,1400,1100,.05f);
+        overheatHiss=Sound("Weapon overheat",.4f,3000,400,.75f);
         engineSource.clip=Sound("Engine",1,70,70,.12f); engineSource.volume=.08f; engineSource.Play();
         BuildPlanet();
         BuildSites();
@@ -163,7 +169,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
     }
 
     // Trauma accumulates instead of overwriting, so a burst of small hits still reads as one big jolt.
-    public void Trauma(float amount) { shake=Mathf.Min(1,shake+amount); }
+    // Scaled by the comfort setting at the single point every caller goes through: 0% removes camera shake outright.
+    public void Trauma(float amount) { shake=Mathf.Min(1,shake+amount*shakeScale); }
     public void Banner(string text) { bannerText=text; bannerTimer=1.5f; }
 
     // Single dispatch point for the three feedback tiers: every event of the same weight gets the same layered package.
@@ -207,11 +214,16 @@ public partial class AerialCombatPrototype : MonoBehaviour
         victim.art.gameObject.SetActive(false); victim.deaths++;
         // Dying always surrenders the run, so the bounty is cleared before the killer's own streak is counted.
         victim.streak=0; if(aceId==victim.id) aceId=-1;
+        // Every trade on the board earns a feed row; only the two the player is in get a colour.
+        if(victim==player) Toast("KILLED BY  "+(attacker && attacker!=victim?attacker.callsign.ToUpper():"THE PLANET"),new Color(1,.3f,.22f));
+        else if(attacker==player) Toast("YOU  ✕  "+victim.callsign.ToUpper(),new Color(.16f,1,.85f));
+        else if(attacker && attacker!=victim) Toast(attacker.callsign.ToUpper()+"  ✕  "+victim.callsign.ToUpper(),new Color(.72f,.84f,.92f));
+        else Toast(victim.callsign.ToUpper()+"  DOWN",new Color(.72f,.84f,.92f));
         if(attacker && attacker!=victim)
         {
             attacker.kills++; attacker.streak++;
             // The crowning gets its own HUD entrance rather than a banner: the kill banner below is the louder, more urgent read.
-            if(attacker.streak>=AceStreak && aceId!=attacker.id){aceId=attacker.id;bountyFresh=1.1f;}
+            if(attacker.streak>=AceStreak && aceId!=attacker.id){aceId=attacker.id;bountyFresh=1.1f;Toast("ACE  "+attacker.callsign.ToUpper(),new Color(1,.8f,.28f));}
         }
         int pieces=Mathf.Min(16,Mathf.CeilToInt(cargo/8f));
         for(int i=0;i<pieces;i++)
@@ -238,10 +250,12 @@ public partial class AerialCombatPrototype : MonoBehaviour
         lastAttackDirection=d.normalized; lastAttackAge=1;
     }
 
-    public void Damage(ArenaPilot p,float damage,ArenaPilot attacker)
+    public void Damage(ArenaPilot p,float damage,ArenaPilot attacker,bool precise=false)
     {
         if(!p.Alive || p.invulnerable>0 || paused || !MatchActive) return;
         if(attacker && attacker!=p){p.NotifyAttacked(attacker);attacker.hitsLanded++;}
+        // Fired before the lethality test so the killing shot still confirms on the crosshair.
+        if(attacker==player && p!=player) Hitmarker(precise);
         if(p.health<=damage) { Kill(p,attacker); return; }
         p.health-=damage;
         if(p==player) { damageFlash=.25f; if(attacker && attacker!=p) RecordIncoming(attacker.transform.position); }
@@ -283,6 +297,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // Salvage taken above the coast line is worth double, judged on the collector's own altitude rather than the
         // shard's: shards drift to whoever is nearest, so the only honest question is who has to fly it back down.
         s.claimed=true; p.cargo+=p.Altitude>550?s.value*2:s.value; shards.Remove(s); Destroy(s.gameObject);
+        if(p==player) cargoPop=.18f;
         Feedback("small",at,p,collectSound);
     }
 
@@ -386,14 +401,45 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // Hit-stop and pause share the one time scale; pause always wins so a freeze frame can never unpause the world.
         hitStop=Mathf.Max(0,hitStop-Time.unscaledDeltaTime);
         Time.timeScale=paused?0:(hitStop>0?.05f:1);
-        if(paused) { engineSource.volume=0; return; }
+        if(paused)
+        {
+            // Comfort rows, edited only while the world is stopped: up/down (or W/S) walks them, left/right (or A/D) changes one.
+            if(k!=null)
+            {
+                if(k.upArrowKey.wasPressedThisFrame || k.wKey.wasPressedThisFrame) accessRow=(accessRow+2)%3;
+                if(k.downArrowKey.wasPressedThisFrame || k.sKey.wasPressedThisFrame) accessRow=(accessRow+1)%3;
+                if(k.digit1Key.wasPressedThisFrame) accessRow=0;
+                if(k.digit2Key.wasPressedThisFrame) accessRow=1;
+                if(k.digit3Key.wasPressedThisFrame) accessRow=2;
+                int step=(k.rightArrowKey.wasPressedThisFrame || k.dKey.wasPressedThisFrame?1:0)-(k.leftArrowKey.wasPressedThisFrame || k.aKey.wasPressedThisFrame?1:0);
+                if(step!=0)
+                {
+                    if(accessRow==0) shakeScale=Mathf.Clamp01(shakeScale+step*.1f);
+                    else if(accessRow==1) reduceFlashing=!reduceFlashing;
+                    else reduceCameraMotion=!reduceCameraMotion;
+                    SaveComfort();
+                }
+            }
+            engineSource.volume=0; return;
+        }
         float dt=Time.deltaTime; elapsed+=dt; MatchTick(dt);
         if(k!=null && phase==MatchPhase.Ended && k.enterKey.wasPressedThisFrame) RestartMatch();
         hitFlash=Mathf.Max(0,hitFlash-dt); damageFlash=Mathf.Max(0,damageFlash-dt);
         // Purely visual timers run on unscaled time so hit-stop does not stretch a banner or a hit wedge.
         float raw=Time.unscaledDeltaTime;
         bannerTimer=Mathf.Max(0,bannerTimer-raw); lastAttackAge=Mathf.Max(0,lastAttackAge-raw);
-        bountyFresh=Mathf.Max(0,bountyFresh-raw);
+        bountyFresh=Mathf.Max(0,bountyFresh-raw); TickHud(raw);
+        // Overheat is an edge, not a state: the hiss fires on the crossing, so a player parked at the ceiling is not deafened.
+        bool cooked=player.heat>.92f;
+        if(cooked && !overheated && audioSource) audioSource.PlayOneShot(overheatHiss,.45f);
+        overheated=cooked;
+        // The lock is resolved exactly once per frame here, because OnGUI runs twice a frame and must never pick a target itself.
+        if(player.Alive)
+        {
+            Transform aim=AimTarget(player,6,out hudTargetVelocity);
+            if(aim!=hudTarget){hudTarget=aim;targetLock=aim?.15f:0;}
+        }
+        else { hudTarget=null; targetLock=0; }
         if(k!=null && player.Alive && Application.isFocused)
         {
             player.throttle=Mathf.Clamp01(player.throttle+((k.leftShiftKey.isPressed?1:0)-(k.leftCtrlKey.isPressed?1:0))*dt*.35f);
@@ -419,6 +465,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
         engineSource.volume=player.Alive?.07f+player.throttle*.08f:0;
         engineSource.pitch=.65f+player.Speed/180+ (player.boost?.4f:0);
     }
+
+    // Missile proximity is a rate, and a rate needs the simulation clock, so it lives here and not in Update.
+    void FixedUpdate() { if(paused) return; MissileTick(Time.fixedDeltaTime); }
 
     public void SnapCamera()
     {
@@ -456,8 +505,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // The lift shrinks with the distance (3.5/14 is the old 5/20), so the aircraft keeps its exact place in the frame.
         cam.transform.position=position+cameraRotation*(new Vector3(0,CameraLift,-cameraDistance)+noise);
         // Angular shake reads far harder than translation at a 14 m chase distance, so roll carries most of the punch.
-        cam.transform.rotation=cameraRotation*Quaternion.Euler(2+noise.y*.9f,noise.x*.9f,noise.z*2.2f);
-        cam.fieldOfView=Mathf.Lerp(cam.fieldOfView,player.boost?76:66,1-Mathf.Exp(-3*dt));
+        // Roll is the component that reads as motion sickness rather than impact, so reduced camera motion drops it first.
+        cam.transform.rotation=cameraRotation*Quaternion.Euler(2+noise.y*.9f,noise.x*.9f,reduceCameraMotion?0:noise.z*2.2f);
+        cam.fieldOfView=Mathf.Lerp(cam.fieldOfView,player.boost && !reduceCameraMotion?76:66,1-Mathf.Exp(-3*dt));
         // Kept as the clear colour behind the dome: if the sky shader ever fails to compile the frame is still flyable.
         cam.backgroundColor=Color.Lerp(new Color(.075f,.19f,.3f),new Color(.003f,.006f,.022f),Mathf.Clamp01(player.Altitude/600));
         FollowSky();

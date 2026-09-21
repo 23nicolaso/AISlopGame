@@ -8,6 +8,15 @@
 
 ### Added
 
+- **事件信息流**（`IMPROVEMENT-PLAN.md` WP-C 信息层）：`AerialCombatPrototype.Toast(text,color)` + `List<ToastRow>` 结构体列表，右侧 x=1010、y=340 起向下四行（行高 30，正好卡在击杀横幅底边 y=331 与雷达顶边 y=527 之间），新的在最上、超过 4 行挤掉最旧的一条。每条存活 3 s：入场用 ease-out cubic 在 .18 s 内从右侧 268 px 外滑入，最后 .5 s 线性淡出。事件源接在既有结算点上——`Kill()`（玩家击杀=蓝绿 `YOU ✕ <呼号>`、玩家被杀=红 `KILLED BY <呼号>`、AI 互杀=灰白 `A ✕ B`、坠毁=`<呼号> DOWN`）、`Kill()` 的加冕分支（`ACE <呼号>`）、`CaptureGate.Tick` 的易主（`REFINERY n CLAIMED +25`）与存分（`+<n> BANKED`，仅玩家）、`TriggerOvercharge()`（紫色 `OVERCHARGE REFINERY n`）。计时走 `TickHud(dt)`，用 `Update()` 里既有的 unscaled `raw`，所以 hit-stop 不会把信息流拉长。
+- **导弹告警**（同上）：`MissileTick(dt)` 在 `FixedUpdate` 里扫新维护的 `bolts` 列表，挑出 `seeker && target==player.transform` 的最近一发。HUD 给出三路信号——准星环上复用 `HitWedge` 几何但换成品红 `(1,.12,.5)` 的箭头（与"你被谁打了"的红色楔形区分开）、屏幕顶部 y=114 闪烁的 `MISSILE <n> m`、以及新的 .08 s / 1400→1100 Hz 提示音，重复间隔按距离从 600 m 的 1.0 s 线性收到 40 m 的 .12 s。反制不新增按键：`ArenaBolt.Tick` 读目标 `ArenaPilot.boost`，加力中的目标把导引头转速从 2.3 rad/s 降到 1.2 rad/s（约一半）。
+- **锁定目标框**：`AimTarget(player,6,…)` 每帧在 `Update()` 里解算一次并缓存（`OnGUI` 一帧跑两次，绝不能自己选目标）。锁定物获得四角括号（按距离在 15–55 px 间缩放，锁定瞬间 1.4×→1× 在 .15 s 内落位）、下方 44 px 血条（pilot 用 `health/100` 橙色，残骸用 `health/maxHealth`）、呼号与米数。颜色：pilot 橙、普通残骸金、Volatile 紫、Armored 银白。原先 `OnGUI` 末尾那圈对所有 pilot 一视同仁的括号降级成半透明短括号 + 60% 白呼号，并跳过已锁定的那个。
+- **过热状态可读化**：`heat>.92` 的开火封锁本来就在，现在补上读数——热量条填满并在红/橙之间以 12 rad/s 脉动、`SEEKER` 行右端出现 `OVERHEAT`、`OVERHEAT` 进入屏幕中央的 `Warning` 栈、准星整圈变红，另有 .4 s / 3000→400 Hz / 噪声 .75 的泄压嘶声在上穿 .92 的那一帧放一次（`overheated` 布尔沿检测，不是每帧）。冷却速率 `-dt*.22` 未动。
+- **命中回馈与精准射击**：`Hitmarker(precise)` 由 `Damage()` 在 `attacker==player` 时调用（放在致命判定之前，所以补刀那一枪也会确认）。准星四角刻度外弹 6 px 并在 .12 s 内以 `pow(t,.6)` 收回；精准命中额外把刻度染金 .4 s 并在准星右上打出 `x1.75` 标签。机制本体在 `ArenaBolt.Tick`：命中判定仍用扫掠线段 `SegmentDistance<4`，但"精不精准"改用弹道直线到机体中心的垂距（`PreciseRadius=1.4` m），垂距小于 1.4 m 伤害 ×1.75（机炮 12→21，导弹 60→105）。
+- **数字弹跳**：`Collect()` 给玩家的 CARGO、`CaptureGate.Tick` 的易主与存分给 BANKED 各自点亮 .18 s 的 `popTimer`，`OnGUI` 用 `1+.25*(1-t)*cos(t*1.5π)` 的 back-out 曲线在标签左缘做局部 `GUI.matrix` TRS —— 1.25× 起跳、中途小幅回缩、.18 s 内归位。
+- **暂停界面的无障碍面板**：ESC 暂停后在 (470,392) 画 340×140 的 COMFORT 面板，三行——`SHAKE 0-100%`（默认 80，步进 10）、`REDUCE FLASHING ON/OFF`、`REDUCE CAMERA MOTION ON/OFF`。上/下（或 W/S）选行，左/右（或 A/D）调整，1/2/3 直接跳行；三项都存进 `PlayerPrefs`（`rift.shake` / `rift.reduceFlashing` / `rift.reduceMotion`），`Awake()` 里 `LoadComfort()` 读回。生效点：`Trauma()` 统一乘 `shakeScale`（0% 等于彻底关掉震屏）；`reduceFlashing` 把全屏 `damageFlash` 红闪改成固定 12% 底色（原峰值 40% 的三成）、把 `Warning` 与过热脉动压成常数 alpha、把命中白闪换成 35% 的青白插值；`reduceCameraMotion` 关掉相机噪声的滚转分量（`noise.z*2.2`）与 boost 的 66→76 FOV 变化。
+- `RiftVerification`：五项新校验 —— 连发 7 条 toast 后只剩 4 条且第一条是最新的、`TickHud(3.05f)` 后清空、`heat=.93` 时 `Shoot` 返回 false 而 `heat=.6` 返回 true、`shakeScale=0` 时 `Trauma(.8)` 后 `shake==0` 而 `shakeScale=1` 时 `shake==.8`、存分的同一次 `Tick` 会点亮 `bankPop`。PASS 日志串加入 `banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale`。
+- `RiftCombatVerification`：两项新校验 —— 手工构造的机炮弹以 1.0 m 与 3.0 m 侧偏掠过同一停放目标，前者伤害恰好是后者的 1.75 倍（实测 21.00 vs 12.00）；以 45° 偏角发射的导引弹单步 `Tick(.02f)` 转过的角度，在目标加力时是不加力时的 `1.2/2.3`（实测 1.37° vs 2.64°）。PASS 日志串加入 `precision 1.75x band, boost halves seeker turn rate`。
 - **程序化天空穹顶**（`IMPROVEMENT-PLAN.md` WP-A）：新 shader `Assets/Shaders/Sky.shader`（`Rift/Sky`）+ 半径 6000 的内翻球（`Cull Front`、`Queue=Background`、不写深度），每帧在 `UpdateChaseCamera`/`SnapCamera` 里被 `FollowSky()` 搬到相机位置，所以 14000 的远裁面永远切不到它。着色按三件事：地平线暖带（`lerp` 到 `(.55,.34,.16)`，权重 `pow(1-|h|,5)` 且按 `dot(ray,sun)²` 偏向太阳一侧）→ 天顶深蓝 `(.03,.115,.40)`；水平线以下按 `pow(-h,.5)` 迅速压暗成远地雾，不再是一片平光；整体用与 `Density()` 同款 280 m 标高的指数 `pow(saturate((air-.07)/.93),.4)` 随高度消散，700 m 以上完全变回近黑太空色。太阳是 HDR 6.0 的 `pow(dot(ray,_SunDir),1500)` 圆面加两段光晕（`pow(,40)*.55` + `pow(,8)*.10`），刚好压过 Volume 里 1.0 的 bloom 阈值。`cam.backgroundColor` 保留为 shader 缺失时的兜底。
 - **星空按高度淡入**：星网格从共用的 `white` 换成独立的加法材质（新 shader `Rift/Additive`），`_Fade` 由相机高度在 150 m→600 m 间线性驱动——白天（发射点 165 m）一颗星都没有，亚轨道满天。
 - **精炼环光柱**：每个 `CaptureGate` 在环顶上方立一根 5×400×5 的加法光柱（gate local +110..+510，沿径向上），颜色复用 `CaptureGate.Tick` 里既有的归属色 `MaterialPropertyBlock`（青=中立 / 蓝绿=玩家 / 橙=AI / 红=争夺 / 紫=超载 / 白闪=分红），2 km 外仍是一条清晰的竖线。材质初始色直接设成中立青，避免第一次 `Tick` 之前闪一帧白。
@@ -41,6 +50,10 @@
 
 ### Changed
 
+- `Damage(p,damage,attacker)` 增加可选参数 `bool precise=false`（默认值保持全部既有调用点不变），只有 `ArenaBolt.Tick` 的 pilot 分支会传 true。
+- `ArenaBolt` 自行把自己注册进 `AerialCombatPrototype.bolts`（`OnEnable` 加、`OnDestroy` 删），导弹告警因此不必每个固定步跑一次 `FindObjectsByType`；校验脚本手工 `AddComponent` 出来的探针弹同样会被登记与清除。
+- `ArenaBolt.Tick` 的导引头转速从写死的 `2.3f` 改为按目标是否加力取 `2.3f / 1.2f`，目标的 `ArenaPilot` 组件只解析一次并缓存。
+- `RestartMatch()` 一并清空信息层状态（toast 列表、四个 pop/命中计时器、锁定目标、导弹告警、过热沿标记），否则重开一局会带着上一局的击杀流开场。
 - **视觉尺度**（WP-A）：追尾距离 20→14 m（boost 24→17），相机抬升同比例 5→3.5 m（`3.5/14` 与旧的 `5/20` 是同一个比值，所以机体在视口里的落点不动，30/60/144 fps 翻滚校验的 `x∈(.3,.7)`、`y∈(.1,.8)` 余量原样保留，实测最大相机角速度仍是 249 °/s）。每架飞机的 `art` 子物体 `localScale` ×1.35 —— 只动视觉节点，4 m / 9 m 的命中半径和 `Hull` 顶点数据一个没碰。
 - **太阳方位** `Euler(38,-28,0)` → `Euler(20,-148,0)`：仰角 20°、方位偏离发射航向约 18°，于是太阳圆面落在 66° 视场的右上（视口约 (0.64,0.81)）而不是相机背后，天空 shader 与平行光共用同一个 `-sun.forward` 向量。灯光颜色 (1,.9,.78)→(1,.88,.74) 配合低角度暖光，强度仍是 1.8（再高会让机体反照率越过 bloom 阈值）。
 - 机炮曳光加粗以便在 100 m 外仍可读：cube 截面 .22→.32，TrailRenderer `startWidth` .18→.3。

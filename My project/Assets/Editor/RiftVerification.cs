@@ -46,8 +46,11 @@ public static class RiftVerification
             var gate=g.gates[0];p.transform.position=gate.transform.position;p.cargo=40;
             foreach(var other in g.pilots)if(other!=p)other.transform.position=gate.transform.position+Vector3.right*500;
             gate.owner=-1;gate.claimant=-1;gate.progress=0;
+            g.bankPop=0;
             gate.Tick(1.5f);
             Check(gate.owner==0 && p.cargo==0 && p.score==188,"Physical zone claims and banks cargo");
+            // The BANKED readout has to be struck, not merely updated: banking arms the pop timer on the same call.
+            Check(g.bankPop>0,"Banking arms the BANKED number pop");
             // The beacon pillar is fed by the ring's own MaterialPropertyBlock, so owning the ring has to repaint the beam.
             var beam=new MaterialPropertyBlock();gate.pillar.GetPropertyBlock(beam);
             Color beamColor=beam.GetColor("_BaseColor");
@@ -88,6 +91,26 @@ public static class RiftVerification
             foreach(var pilot in g.pilots)fresh&=pilot.score==0 && pilot.cargo==0 && pilot.kills==0 && pilot.deaths==0 && pilot.Alive;
             Check(fresh,"Restart returns every pilot and gate to a fresh countdown");
             g.phase=MatchPhase.Playing;g.phaseTimer=0;
+
+            // Information layer: the feed is a four-row window on unscaled time, not a scrollback.
+            g.toasts.Clear();
+            for(int i=0;i<7;i++)g.Toast("EVENT "+i,Color.white);
+            Check(g.toasts.Count==4 && g.toasts[0].text=="EVENT 6","Event feed caps at four rows, newest first");
+            g.TickHud(AerialCombatPrototype.ToastLife+.05f);
+            Check(g.toasts.Count==0,"A toast expires three seconds after it lands");
+            // The overheat lockout is a real gate, not only a red bar: .93 refuses the trigger and .6 accepts it again.
+            g.Spawn(p);p.invulnerable=0;p.fireCooldown=0;p.heat=.93f;
+            Check(!g.Shoot(p),"Overheat blocks the cannon above .92");
+            p.fireCooldown=0;p.heat=.6f;
+            Check(g.Shoot(p),"The cannon fires again once heat recovers");
+            p.heat=0;p.fireCooldown=0;
+            // Comfort: the shake slider multiplies at the single point every caller of Trauma goes through.
+            float comfort=g.shakeScale;
+            g.shake=0;g.shakeScale=0;g.Trauma(.8f);
+            Check(g.shake==0,"Shake at 0% removes camera trauma entirely");
+            g.shake=0;g.shakeScale=1;g.Trauma(.8f);
+            Check(Mathf.Abs(g.shake-.8f)<.001f,"Shake at 100% passes trauma through untouched");
+            g.shake=0;g.shakeScale=comfort;
 
             // Cargo weight: identical launch state, five seconds each; the full hold must end lower and slower.
             g.Spawn(p);p.controls=Vector3.zero;
@@ -178,7 +201,7 @@ public static class RiftVerification
             g.UpdateChaseCamera(.02f,p.transform.position,p.transform.rotation);
             Check(lowRate>20 && g.windStreaks.emission.rateOverTime.constant<1,"Wind streaks scale with speed and air density");
 
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate, banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
         }
         finally
         {

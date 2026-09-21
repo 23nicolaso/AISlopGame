@@ -27,7 +27,10 @@ Mouse flight sensitivity is intentionally reduced so small aiming corrections do
 | Left mouse / F | Cannon, with narrow-cone lead assistance |
 | Right mouse | Seeker missile |
 | C | Center mouse steering |
-| Escape | Pause / resume |
+| Escape | Pause / resume (opens the comfort panel) |
+| Up / Down (or W / S) | Select a comfort row — **while paused** |
+| Left / Right (or A / D) | Adjust the selected comfort row — **while paused** |
+| 1 / 2 / 3 | Jump straight to a comfort row — **while paused** |
 | Enter | Restart the match (results screen only) |
 
 Lift, drag, gravity, momentum, stall behavior, and thinner air affect flight. This is an assisted small-planet prototype with compressed distances, not an IL-2-level flight simulator or accurate orbital mechanics model.
@@ -43,6 +46,24 @@ Three things exist purely so you can tell where you are and how fast you are goi
 - **Refinery beacons.** Every capture ring fires a 400 m light pillar straight up along the local vertical, in the ring's current owner colour. It is visible from about 2 km, which is far enough to pick your next refinery before you can resolve the ring itself.
 - **Ground furniture.** Rock spires (up to 70 m) and relay masts with lit tips are scattered within 350 m of every refinery. They have no collision — you cannot hit them — but at low level they are the only thing that tells you 150 m/s from 80 m/s. Cloud banks sit between 40 m and 110 m and are kept at least 400 m clear of every ring, so weather never hides a fight.
 - **Wind streaks.** Above 40 m/s the air starts showing streaks past the canopy, doubling on the burner and fading out as the atmosphere thins. In near-vacuum they stop entirely, which is the cue that your controls have gone soft.
+
+## Reading the fight
+
+The HUD answers five questions without you having to look away from the reticle.
+
+- **What just happened.** An event feed runs down the right side under the rankings: kills across the whole board, refineries changing hands, your own banking, overcharges lighting up, and anyone getting crowned ace. Four rows, newest on top, three seconds each. Your own rows are coloured — teal when you did it, red when it was done to you — everyone else's are grey, so you can skim it in peripheral vision.
+- **Something is chasing you.** A seeker with your name on it puts a magenta chevron on the reticle ring pointing at it (the plain red chevron still means "you were shot from there"), a `MISSILE` readout with its range at the top of the screen, and a tone that speeds up as it closes — one beep a second at 600 m, eight a second at 40 m. **Hold boost to break it:** a burner-jinking target cuts the seeker's turn rate roughly in half, which is usually enough to make it overshoot. There is no flare key; the boost you already have is the counter-play.
+- **What you are aimed at.** Whatever falls inside the narrow lead-assist cone gets a full target box: four corner brackets that snap in from 1.4×, a health bar, a callsign and a range in metres. Wrecks get the same treatment, colour-coded — gold for ordinary salvage, violet for a volatile reactor, silver for an armoured hull that will shrug off your cannon. Everything else you can see keeps a pair of dim ticks.
+- **Your gun is cooked.** Past 92% heat the cannon simply will not fire. The heat bar fills solid and pulses red, `OVERHEAT` appears both beside the bar and in the central warning stack, the whole reticle turns red, and the weapon bay vents once with a hiss. Nothing recovers faster or slower than before — the state is just impossible to miss now.
+- **That shot counted.** Landing a hit kicks the reticle's four corner ticks outward and snaps them back. If your round's line of flight passed within 1.4 m of the hull centre it was a precision hit: the ticks go gold, an `x1.75` tag flashes, and the round does 1.75× damage (21 instead of 12 from the cannon, 105 instead of 60 from a seeker). Cargo and banked totals pop when they change, so a pickup or a deposit registers even mid-turn.
+
+### Comfort settings
+
+Pause with Escape and a COMFORT panel appears under the PAUSED text. Three rows, adjusted with the arrow keys (or WASD), remembered between sessions:
+
+- **SHAKE** — 0 to 100% in steps of 10, default 80. Scales every source of camera shake at once; 0% removes it entirely.
+- **REDUCE FLASHING** — turns the full-screen damage flash into a constant dim tint and takes the pulse out of the warning text and the overheat bar.
+- **REDUCE CAMERA MOTION** — removes the roll component of impact shake and the field-of-view widening on boost, which are the two things most likely to cause motion discomfort.
 
 ## Verification
 
