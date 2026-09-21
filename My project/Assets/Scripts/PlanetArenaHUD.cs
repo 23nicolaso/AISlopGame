@@ -100,6 +100,13 @@ public partial class AerialCombatPrototype
         lockBeep-=dt;
         if(lockBeep<=0){lockBeep=.3f;if(audioSource)audioSource.PlayOneShot(lockTone,.4f);}
     }
+    // Scope mapping shared by every radar blip: the aircraft's own frame, 14 m per pixel, pinned to the 69 px rim beyond
+    // ~965 m so a far contact still shows its bearing. Public and pure so the harness can check the geometry.
+    public Vector2 RadarPoint(Vector3 world)
+    {
+        Vector3 d=player.transform.InverseTransformDirection(world-player.transform.position);
+        return Vector2.ClampMagnitude(new Vector2(d.x,-d.z)/14,69);
+    }
     // Back-out ease: 1.25x on the frame the number changes, a shallow undershoot, then home inside .18 s.
     float Pop(float timer){ if(timer<=0)return 1; float t=1-Mathf.Clamp01(timer/.18f); return 1+.25f*(1-t)*Mathf.Cos(t*Mathf.PI*1.5f); }
     void Styles()
@@ -540,12 +547,24 @@ public partial class AerialCombatPrototype
         Vector2 radar=new Vector2(1170,600);Ring2D(radar,73,new Color(.3f,.6f,.7f,.6f));Ring2D(radar,36,new Color(.3f,.6f,.7f,.3f));
         Line(radar+Vector2.up*73,radar+Vector2.down*73,new Color(.3f,.6f,.7f,.3f));
         Line(radar+Vector2.left*73,radar+Vector2.right*73,new Color(.3f,.6f,.7f,.3f));
+        // Rings first, under the contacts: a hollow blip in the owner colour, the surge one breathing violet. With the
+        // fields 670 m apart the next refinery is always on the scope, which is where a laden pilot looks first.
+        foreach(var ring in gates)
+        {
+            Vector2 blip=radar+RadarPoint(ring.transform.position);
+            bool contested=false;int inside=0;foreach(var q in pilots)if(q.Alive && Vector3.Distance(q.transform.position,ring.transform.position)<CaptureGate.Radius)inside++;
+            contested=inside>1;
+            Color ringColor=contested?new Color(1,.18f,.08f):ring.owner==0?new Color(.1f,1,.8f):ring.owner<0?new Color(.1f,.7f,1):orange;
+            if(ring.overcharge>0)ringColor=Color.Lerp(ringColor,new Color(.82f,.44f,1),.5f+.5f*Mathf.Sin(Time.unscaledTime*5.5f));
+            Ring2D(blip,ring.overcharge>0?6:4,new Color(ringColor.r,ringColor.g,ringColor.b,.85f));
+        }
         foreach(var p in pilots)
         {
             if(p==player || !p.Alive)continue;
-            Vector3 d=player.transform.InverseTransformDirection(p.transform.position-player.transform.position);
-            Vector2 point=Vector2.ClampMagnitude(new Vector2(d.x,-d.z)/14,69);
-            Box(new Rect(radar.x+point.x-2,radar.y+point.y-2,4,4),orange);
+            Vector2 point=RadarPoint(p.transform.position);
+            bool grudge=p.id==vendettaId;
+            Box(new Rect(radar.x+point.x-2,radar.y+point.y-2,4,4),grudge?new Color(1,.3f,.2f):p.id==aceId?goldColor:orange);
+            if(grudge)Ring2D(radar+point,6+2*Mathf.Sin(Time.unscaledTime*5),new Color(1,.3f,.2f,.8f));
         }
         Box(new Rect(radar.x-2,radar.y-2,4,4),cyan);
         var gate=NearestGate(player.transform.position);if(gate)NavMarker(gate.transform.position,cyan,true);

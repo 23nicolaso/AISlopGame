@@ -88,6 +88,10 @@ Pause with Escape and a COMFORT panel appears under the PAUSED text. Three rows,
 - **REDUCE FLASHING** — turns the full-screen damage flash into a constant dim tint and takes the pulse out of the warning text and the overheat bar.
 - **REDUCE CAMERA MOTION** — removes the roll component of impact shake and the field-of-view widening on boost, which are the two things most likely to cause motion discomfort.
 
+## Radar
+
+The scope at bottom right is the aircraft's own frame at 14 m per pixel: refinery rings are hollow blips in their owner colour (the overcharged one breathes violet), rivals are orange dots, the ace gold, the vendetta target red with a breathing ring, and anything past 965 m is pinned to the rim so its bearing survives.
+
 ## First flight
 
 Under the title block a single OBJECTIVE line walks a new pilot through the loop once: shoot a reactor, fly into what it spills, take it to a ring, hold inside the ring. Each step pops as it clears and a bank from any step ends it with LOOP CLOSED / NOW GO HUNTING. It never shows again on the same machine. The results screen closes every match with four awards under the standings — Top Gun, Big Deposit, Ironclad and Marksman — so a match that was lost on banked score can still have been won somewhere.

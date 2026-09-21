@@ -122,6 +122,10 @@ public static class RiftVerification
             g.tutorialStep=4;g.tutorialPop=0;p.cargo=0;lesson.owner=-1;lesson.claimant=-1;lesson.progress=0;lesson.ownerAge=0;
             g.cores[0].health=g.cores[0].maxHealth;
 
+            // Radar geometry: dead ahead is straight up the scope at 14 m per pixel, and anything past the rim keeps its bearing.
+            Vector2 ahead=g.RadarPoint(p.transform.position+p.transform.forward*280),far=g.RadarPoint(p.transform.position-p.transform.right*3000);
+            Check(Mathf.Abs(ahead.x)<.01f && Mathf.Abs(ahead.y+20)<.01f && Mathf.Abs(far.magnitude-69)<.01f && far.x<-68,"Radar maps bearing and range onto the scope");
+
             // Awards: four deterministic picks from the counters the results screen already has.
             foreach(var pilot in g.pilots){pilot.kills=0;pilot.deaths=2;pilot.biggestBank=0;pilot.combatShotsFired=0;pilot.hitsLanded=0;}
             g.pilots[2].kills=4;g.pilots[3].biggestBank=90;g.pilots[4].deaths=0;g.pilots[5].combatShotsFired=40;g.pilots[5].hitsLanded=20;
@@ -271,7 +275,7 @@ public static class RiftVerification
             Check(g.notes.Count==0,"The note queue drains on TickAudio");
             chimeGate.owner=-1;chimeGate.claimant=-1;chimeGate.progress=0;chimeGate.ownerAge=0;p.cargo=0;
 
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate, banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale, site value bands, per-site wreck counts, engine layer cross-fade, wind bed speed/vacuum gate, claim chime queue and drain, vendetta floor on an empty killer, onboarding objective chain, match awards. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate, banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale, site value bands, per-site wreck counts, engine layer cross-fade, wind bed speed/vacuum gate, claim chime queue and drain, vendetta floor on an empty killer, onboarding objective chain, radar scope geometry, match awards. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
         }
         finally
         {
