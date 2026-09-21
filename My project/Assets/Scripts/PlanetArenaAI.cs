@@ -38,7 +38,7 @@ public partial class ArenaPilot
     Vector3 breakDirection, searchDirection, lastKnownPosition;
     bool repairing;
     int reversalSign;
-    Vector3 runIn;
+    Vector3 runIn;float runInAge;
     float Reaction => Profile.reaction;
     const float ConeHalfAngle=55;   // 110 degree forward cone
     const float PeripheralRange=250, SightRange=950, HearingRange=600;
@@ -199,8 +199,10 @@ public partial class ArenaPilot
             // the turn crossed 450 m and orbited the ring at 160-660 m for a whole match.
             Vector3 toGate=gateTarget.transform.position-transform.position;
             float gateAngle=Vector3.Angle(transform.forward,toGate);
-            if(runIn==Vector3.zero && toGate.magnitude<450 && gateAngle>35)runIn=transform.position+transform.forward*600;
-            if(runIn!=Vector3.zero && (Vector3.Distance(transform.position,runIn)<90 || (gateAngle<20 && toGate.magnitude>450)))runIn=Vector3.zero;
+            if(runIn==Vector3.zero && toGate.magnitude<450 && gateAngle>35){runIn=transform.position+transform.forward*600;runInAge=0;}
+            runInAge+=dt;
+            // A missed run-in point must not become a destination of its own: twelve seconds, then re-plan from wherever we are.
+            if(runIn!=Vector3.zero && (runInAge>12 || Vector3.Distance(transform.position,runIn)<90 || (gateAngle<20 && toGate.magnitude>450)))runIn=Vector3.zero;
             navigation=runIn!=Vector3.zero?runIn:gateTarget.transform.position;
         }
         else if(shardTarget)navigation=shardTarget.transform.position;
@@ -329,7 +331,11 @@ public partial class ArenaPilot
         // where the fields are; nose-down it would just steepen the dive. Climbing past the target's altitude, past
         // 650 m and climbing, or anywhere above 800 m, the engine is off: no drag up there, only gravity brings them home.
         if(climb<-15 && Altitude<650 && down>-.15f)throttle=Mathf.Max(throttle,Mathf.Clamp01((.5f-density)/.3f));
-        else if(!recover && !rivalTarget && ((Altitude>650 && (climb>10 || Altitude>800)) || (climb>15 && Altitude>AerialCombatPrototype.Altitude(navigation)+60)))throttle=0;
+        // Above the air the engine is the ONLY control: an unconditional cut past 800 m left laden pilots pointing
+        // straight at their ring while coasting away from it for a minute (bank sampler, zero stick, growing range).
+        // So: off while climbing or with the nose above the horizon, otherwise .7 to push the nose-down line home.
+        else if(!recover && !rivalTarget && Altitude>650)throttle=(climb>10 || noseElevation>-3)?0:.7f;
+        else if(!recover && !rivalTarget && climb>15 && Altitude>AerialCombatPrototype.Altitude(navigation)+60)throttle=0;
         boost=fuel>.25f && ((recover && Altitude<350 && descent>0 && (Speed<80 || descent>45)) || (Altitude>280 && Altitude<650 && descent>35 && !rivalTarget));
 
         if(gateTarget && cargo==0 && health>=85){gateTarget=null;decision=0;}
