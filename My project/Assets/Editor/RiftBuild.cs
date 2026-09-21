@@ -48,4 +48,16 @@ public static class RiftBuild
         Debug.Log("[BUILD] " + report.summary.result + " -> " + output + " (" + report.summary.totalSize / (1024 * 1024) + " MB, " + report.summary.totalErrors + " errors)");
         if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
     }
+
+    // Orbit Snake greybox player: <repo>/Builds/ORBIT.app, its own scene only.
+    [MenuItem("Orbit/Build macOS player")]
+    public static void OrbitMacOS()
+    {
+        EnsureShaderAssets(); OrbitSceneBuilder.Ensure();
+        string output = Path.GetFullPath(Path.Combine(Application.dataPath, "../../Builds/ORBIT.app"));
+        Directory.CreateDirectory(Path.GetDirectoryName(output));
+        BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { OrbitSceneBuilder.ScenePath }, locationPathName = output, target = BuildTarget.StandaloneOSX, options = BuildOptions.None });
+        Debug.Log("[BUILD] " + report.summary.result + " -> " + output + " (" + report.summary.totalSize / (1024 * 1024) + " MB, " + report.summary.totalErrors + " errors)");
+        if (report.summary.result != BuildResult.Succeeded) EditorApplication.Exit(1);
+    }
 }

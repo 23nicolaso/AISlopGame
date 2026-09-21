@@ -96,6 +96,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
+        // Only RIFT's own scene: the Orbit Snake scene has its own manager and must not get an arena spawned into it.
+        if(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name!="SampleScene")return;
         if(FindAnyObjectByType<AerialCombatPrototype>()==null)
             new GameObject("RIFT / Planetary arena").AddComponent<AerialCombatPrototype>();
     }
