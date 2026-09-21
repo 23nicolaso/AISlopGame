@@ -199,7 +199,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         else if(attacker==player) Banner("SPLASHED  "+victim.callsign+"   +"+spoils+" SALVAGE");
     }
 
-    // Remembered in the player's own frame so the HUD wedge stays correct while the ship keeps rolling.
+    // Stored as a world bearing; the HUD converts it into camera space every frame so the wedge tracks while the ship rolls.
     public void RecordIncoming(Vector3 source)
     {
         Vector3 d=source-player.transform.position;
@@ -404,7 +404,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
         float kick=shake*shake*2.6f;
         Vector3 noise=new Vector3(Mathf.PerlinNoise(Time.unscaledTime*19,0)-.5f,Mathf.PerlinNoise(0,Time.unscaledTime*17)-.5f,Mathf.PerlinNoise(Time.unscaledTime*13,7)-.5f)*kick;
         cam.transform.position=position+cameraRotation*(new Vector3(0,5,-cameraDistance)+noise);
-        cam.transform.rotation=cameraRotation*Quaternion.Euler(2,0,0);
+        // Angular shake reads far harder than translation at a 20 m chase distance, so roll carries most of the punch.
+        cam.transform.rotation=cameraRotation*Quaternion.Euler(2+noise.y*.9f,noise.x*.9f,noise.z*2.2f);
         cam.fieldOfView=Mathf.Lerp(cam.fieldOfView,player.boost?76:66,1-Mathf.Exp(-3*dt));
         cam.backgroundColor=Color.Lerp(new Color(.075f,.19f,.3f),new Color(.003f,.006f,.022f),Mathf.Clamp01(player.Altitude/600));
     }
