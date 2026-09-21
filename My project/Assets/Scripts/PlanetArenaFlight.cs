@@ -146,7 +146,10 @@ public partial class ArenaPilot : MonoBehaviour
                 }
             }
         }
-        Vector3 rates=new Vector3(-controls.x*44,controls.y*27,-Mathf.Clamp(controls.z+assist,-1,1)*85)*authority;
+        // Pitch 58 and yaw 34 deg/s at full authority (were 44 / 27): a replay of a rival alone at a low-orbit field showed
+        // a 100 m/s turning circle of 250 m against wrecks 100 m apart, so it orbited its own field for a whole match
+        // without a shot. The same rates are the player's, and 32 deg/s of pitch in thick air never felt like a fighter.
+        Vector3 rates=new Vector3(-controls.x*58,controls.y*34,-Mathf.Clamp(controls.z+assist,-1,1)*85)*authority;
         angularVelocity=Vector3.Lerp(angularVelocity,rates,1-Mathf.Exp(-(recovering?9:5)*dt));
         transform.rotation*=Quaternion.Euler(angularVelocity*dt);
         bool burner=boost && fuel>.02f;

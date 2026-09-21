@@ -317,7 +317,9 @@ public partial class ArenaPilot
         controls=new Vector3(Mathf.Clamp(pitchError/gain,-1,1),Mathf.Clamp(yawError/(gain*1.3f),-1,1),Mathf.Clamp(rollError/(gain*1.6f),-1,1));
         // Same outranking as tactic/navigation: an engaged or alerted pilot never throttles down to the lazy banking speed.
         // Full power in a pull-up only while still sinking; once the nose is above the horizon the speed is the danger.
-        throttle=recover?(descent>0?1:.6f):alert?.72f:rivalTarget?(distance>240?.95f:.58f):gateTarget?.42f:.72f;
+        // Inside 300 m of a wreck the throttle comes back: a slower pass turns tighter, and the field is only 100 m wide.
+        bool wreckPass=!rivalTarget && !gateTarget && coreTarget && coreTarget.Available && Vector3.Distance(transform.position,coreTarget.transform.position)<300;
+        throttle=recover?(descent>0?1:.6f):alert?.72f:rivalTarget?(distance>240?.95f:.58f):gateTarget?.42f:wreckPass?.5f:.72f;
         // Level flight at density .2 (the 460 m fields) needs ~190 m/s; the lazy .42 banking throttle there is a
         // slow-motion fall the pilot never notices until the pull-up. Floor the throttle on thinness: nothing changes
         // below 170 m, full power from ~400 m up, and the burner arrests a sink that thrust alone cannot.
