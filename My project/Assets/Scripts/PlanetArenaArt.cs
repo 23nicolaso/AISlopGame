@@ -116,15 +116,42 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
 
     void BuildCore(SalvageCore core)
     {
-        core.art=new GameObject("Wreck / exposed reactor").transform;core.art.SetParent(core.transform,false);
-        Hull(core.art,"Broken armored hull",Vector3.zero,new Vector3(9,10,7),dark);
-        core.weakPoint=Shape("Exposed golden reactor / shoot",core.art,PrimitiveType.Sphere,new Vector3(0,6,0),Vector3.one*6,gold).transform;
-        Ring(core.art,11,gold,.6f);
+        bool blast=core.kind==CoreKind.Volatile,armor=core.kind==CoreKind.Armored;
+        // One silhouette read at 300 m: gold reactor = ordinary, violet = unstable, slate slab = reinforced.
+        Material accent=blast?violet:armor?white:gold;
+        core.art=new GameObject(blast?"Wreck / unstable reactor":armor?"Wreck / reinforced hull":"Wreck / exposed reactor").transform;
+        core.art.SetParent(core.transform,false);
+        Hull(core.art,"Broken armored hull",Vector3.zero,new Vector3(9,10,7)*(armor?1.2f:1),dark);
+        core.weakPoint=Shape("Exposed reactor / shoot",core.art,PrimitiveType.Sphere,new Vector3(0,6,0),Vector3.one*(blast?7:armor?4.5f:6),accent).transform;
+        Ring(core.art,armor?13:11,accent,armor?1.4f:.6f);
         for(int i=-1;i<=1;i+=2)
         {
-            var panel=Shape("Torn solar array",core.art,PrimitiveType.Cube,new Vector3(i*17,0,-5),new Vector3(18,.7f,12),alloy);
+            var panel=Shape("Torn solar array",core.art,PrimitiveType.Cube,new Vector3(i*17,0,-5),new Vector3(18,.7f,12),armor?slate:alloy);
             panel.transform.localRotation=Quaternion.Euler(12,i*15,i*20);
-            Shape("Reactor conduit",core.art,PrimitiveType.Cube,new Vector3(i*7,2,0),new Vector3(1,1,14),gold);
+            Shape("Reactor conduit",core.art,PrimitiveType.Cube,new Vector3(i*7,2,0),new Vector3(1,1,14),accent);
+        }
+        if(armor)
+            // Four overlapping belts: the mass is visible, so the cannon discount is legible before anyone reads a number.
+            for(int i=0;i<4;i++)
+            {
+                float a=i*Mathf.PI*.5f+Mathf.PI*.25f;
+                var belt=Shape("Ablative armor belt",core.art,PrimitiveType.Cube,new Vector3(Mathf.Cos(a)*7,1.5f,Mathf.Sin(a)*6),new Vector3(9,13,3.2f),slate);
+                belt.transform.localRotation=Quaternion.Euler(0,-a*Mathf.Rad2Deg,0);
+            }
+        if(blast)
+        {
+            // Split containment cage around a reactor that never got shut down; the vents point where the blast will go.
+            for(int i=0;i<3;i++)
+            {
+                var cage=Ring(core.art,9.5f-i*1.1f,violet,.45f);
+                cage.transform.localPosition=new Vector3(0,6,0);
+                cage.transform.localRotation=Quaternion.Euler(i*60,i*34,0);
+            }
+            for(int i=-1;i<=1;i+=2)
+            {
+                var vent=Shape("Ruptured coolant vent",core.art,PrimitiveType.Cube,new Vector3(i*4.5f,8.5f,0),new Vector3(1.6f,5,1.6f),violet);
+                vent.transform.localRotation=Quaternion.Euler(0,0,i*26);
+            }
         }
     }
 

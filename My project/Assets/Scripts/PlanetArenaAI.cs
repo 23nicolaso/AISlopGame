@@ -141,7 +141,17 @@ public partial class ArenaPilot
                 if(d<nearest && arena.VisibleBetween(transform.position,shard.transform.position))
                 {nearest=d;shardTarget=shard;}
             }
-            coreTarget=arena.NearestCore(transform.position);
+            // A volatile reactor inside its own blast radius is not salvage, it is a bomb under the nose. A vulture
+            // (greed >= 2) accepts a far tighter margin, which is how it ends up detonating one on top of a rival.
+            float standoff=Profile.greed>=2?25:60;
+            coreTarget=null;float closest=float.MaxValue;
+            foreach(var core in arena.cores)
+            {
+                if(!core.Available)continue;
+                float d=Vector3.Distance(transform.position,core.transform.position);
+                if(core.kind==CoreKind.Volatile && d<standoff)continue;
+                if(d<closest){closest=d;coreTarget=core;}
+            }
         }
 
         Vector3 up=AerialCombatPrototype.Up(transform.position);

@@ -117,10 +117,14 @@ public partial class ArenaPilot : MonoBehaviour
     void Think(float dt) { FlyTactics(dt); }
 }
 
+public enum CoreKind { Normal, Volatile, Armored }
+
 public class SalvageCore : MonoBehaviour
 {
     public int value;
-    public float health=65, cooldown;
+    public CoreKind kind;
+    public float health=65, maxHealth=65, cooldown;
+    public const float BlastRadius=45, BlastDamage=55;
     public Transform art, weakPoint;
     public bool Available => cooldown<=0 && health>0;
     void FixedUpdate() { Tick(Time.fixedDeltaTime); }
@@ -130,21 +134,32 @@ public class SalvageCore : MonoBehaviour
         if(cooldown>0)
         {
             cooldown-=dt;
-            if(cooldown<=0){health=65;art.gameObject.SetActive(true);}
+            if(cooldown<=0){health=maxHealth;art.gameObject.SetActive(true);}
         }
         else if(art) art.Rotate(0,dt*8,dt*3);
-        if(weakPoint) weakPoint.localScale=Vector3.one*(5.5f+Mathf.Sin(arena.elapsed*3)*.35f);
+        // An unstable reactor pulses twice as fast and twice as wide: it reads as a fuse from across the field.
+        if(weakPoint) weakPoint.localScale=Vector3.one*((kind==CoreKind.Volatile?7:kind==CoreKind.Armored?4.5f:5.5f)+Mathf.Sin(arena.elapsed*(kind==CoreKind.Volatile?7:3))*(kind==CoreKind.Volatile?.8f:.35f));
     }
-    public void Hit(float damage,ArenaPilot shooter)
+    public void Hit(float damage,ArenaPilot shooter,bool missile=false)
     {
         if(!Available) return;
         var g=AerialCombatPrototype.I;
+        // Belt armour shrugs off cannon fire; the seeker is what it is priced for, which finally gives the missile a second job.
+        if(kind==CoreKind.Armored && !missile) damage*=.3f;
         health-=damage;
         g.Feedback("small",transform.position,shooter);
         if(health>0) return;
         cooldown=28; art.gameObject.SetActive(false);
-        for(int i=0;i<7;i++) g.SpawnShard(transform.position+Random.insideUnitSphere*16,value);
-        g.Feedback("medium",transform.position,shooter);
+        int pieces=kind==CoreKind.Armored?21:kind==CoreKind.Volatile?11:7;
+        for(int i=0;i<pieces;i++) g.SpawnShard(transform.position+Random.insideUnitSphere*16,value);
+        if(kind==CoreKind.Volatile)
+        {
+            // The blast is indiscriminate on purpose: lighting the fuse from inside the radius is the price of taking the shot early.
+            foreach(var victim in g.pilots)
+                if(victim.Alive && Vector3.Distance(victim.transform.position,transform.position)<BlastRadius) g.Damage(victim,BlastDamage,shooter);
+            g.Feedback("large",transform.position,shooter);
+        }
+        else g.Feedback("medium",transform.position,shooter);
     }
 }
 
@@ -271,7 +286,7 @@ public class ArenaBolt : MonoBehaviour
             {nearest=along;core=c;pilot=null;}
         }
         if(pilot){spent=true;g.Damage(pilot,seeker?60:12,owner);Destroy(gameObject);}
-        else if(core){spent=true;core.Hit(seeker?80:18,owner);Destroy(gameObject);}
+        else if(core){spent=true;core.Hit(seeker?80:18,owner,seeker);Destroy(gameObject);}
     }
 }
 

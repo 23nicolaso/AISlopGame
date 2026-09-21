@@ -45,7 +45,7 @@ public partial class AerialCombatPrototype
         // Loose salvage and broken wrecks are board state too: a restart that left them lying around would hand the first lap away.
         for(int i=shards.Count-1;i>=0;i--) if(shards[i]) Destroy(shards[i].gameObject);
         shards.Clear();
-        foreach(var core in cores){core.cooldown=0;core.health=65;if(core.art)core.art.gameObject.SetActive(true);}
+        foreach(var core in cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}
         elapsed=0;bannerTimer=0;damageFlash=0;lastAttackAge=0;shake=0;
         phase=MatchPhase.Countdown;phaseTimer=0;heartbeatMark=-1;
     }

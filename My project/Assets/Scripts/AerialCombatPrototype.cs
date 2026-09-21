@@ -23,7 +23,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public Vector3 lastAttackDirection;
     public Transform world;
     readonly List<Object> owned = new List<Object>();
-    Material alloy, dark, teal, red, gold, white, violet;
+    Material alloy, dark, teal, red, gold, white, violet, slate;
     AudioSource audioSource, engineSource;
     AudioClip gunSound, hitSound, boomSound, collectSound;
     Quaternion cameraRotation;
@@ -61,6 +61,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
         teal=Material(new Color(.09f,1.14f,1.44f),true); red=Material(new Color(1.5f,.16f,.07f),true);
         gold=Material(new Color(1.45f,.84f,.14f),true); white=Material(new Color(.72f,.86f,1.06f),true);
         violet=Material(new Color(.55f,.24f,1.32f),true);
+        // Armour belts read as mass: darker and duller than the hull alloy so a reinforced wreck is obvious before the first shot.
+        slate=Material(new Color(.17f,.19f,.23f),false);
         RenderSettings.skybox=null; RenderSettings.fog=false;
         // Trilight gives the hull shading a direction (cold sky above, warm ground bounce below) instead of flat fill.
         RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Trilight;
@@ -117,6 +119,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
             {
                 var core=new GameObject("Breakable salvage core").AddComponent<SalvageCore>(); core.transform.SetParent(world);
                 core.transform.position=SurfacePoint(lat[s]+c*2,lon+(c-1.5f)*3,155+(s%2)*300+c*8);
+                // One unstable reactor per field is a weapon lying on the table; armour is rarer so the seeker stays a choice, not a chore.
+                core.kind=c==2?CoreKind.Volatile:(c==3 && s%3==0?CoreKind.Armored:CoreKind.Normal);
+                core.maxHealth=core.kind==CoreKind.Armored?200:65; core.health=core.maxHealth;
                 core.value=s%2==0?8:16; BuildCore(core); cores.Add(core);
                 if(c==0) for(int n=0;n<5;n++) SpawnShard(core.transform.position+new Vector3(n*7-14,4,-20),core.value);
             }
