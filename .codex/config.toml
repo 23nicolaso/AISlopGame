@@ -1,0 +1,6 @@
+# Project-local MCP configuration for the Unity Editor bridge.
+# Start the bridge from Unity: Window -> MCP for Unity.
+
+[mcp_servers.unity]
+url = "http://localhost:8080/mcp"
+enabled = true

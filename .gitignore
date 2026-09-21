@@ -1,0 +1,42 @@
+# Unity generated files
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Unity generated metadata and IDE files
+[Mm]emoryCaptures/
+[Rr]ecordings/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# OS/editor files
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Crash reports
+sysinfo.txt
+
+# Build output
+*.apk
+*.aab
+*.unitypackage
+*.app
+*.exe
+*.appx
+*.xcodeproj

@@ -1,0 +1,79 @@
+using System;
+using UnityEditor;
+using UnityEngine;
+
+public static class RiftVerification
+{
+    static void Check(bool c,string message){if(!c)throw new Exception("ARENA CHECK FAILED: "+message);}
+    [MenuItem("Rift/Verify planetary arena")]
+    static void Verify()
+    {
+        var g=AerialCombatPrototype.I;
+        Check(EditorApplication.isPlaying && g!=null,"Enter Play Mode");
+        bool wasPaused=g.paused;g.paused=false;
+        var p=g.player;int oldScore=p.score;
+        try
+        {
+            Check(g.pilots.Count==8 && g.cores.Count==24 && g.gates.Count==6,"Arena population");
+            Check(AerialCombatPrototype.Density(700)<AerialCombatPrototype.Density(100)*.2f,"Thinning atmosphere");
+            Check(Mathf.Abs(AerialCombatPrototype.Altitude(new Vector3(0,150,0))-150)<.01f,"Radial altitude");
+            g.Spawn(p);p.invulnerable=0;p.cargo=53;p.score=123;
+            int shards=g.shards.Count;
+            g.Kill(p,g.pilots[1]);
+            Check(!p.Alive && p.respawn==3 && p.cargo==0 && p.score==123,"Death preserves banked score, drops cargo");
+            Check(g.shards.Count>shards,"Death creates salvage");
+            p.Simulate(3.1f);
+            Check(p.Alive && p.cargo==0 && p.invulnerable>0,"Automatic player respawn");
+            var bot=g.pilots[1];g.Kill(bot,p);bot.Simulate(3.1f);
+            Check(bot.Alive,"Automatic bot respawn");
+
+            g.SpawnShard(p.transform.position,9);
+            var shard=g.shards[g.shards.Count-1];g.Collect(p,shard);g.Collect(p,shard);
+            Check(p.cargo==9,"Collect exactly once");
+            var gate=g.gates[0];p.transform.position=gate.transform.position;p.cargo=40;
+            foreach(var other in g.pilots)if(other!=p)other.transform.position=gate.transform.position+Vector3.right*500;
+            gate.owner=-1;gate.claimant=-1;gate.progress=0;
+            gate.Tick(1.5f);
+            Check(gate.owner==0 && p.cargo==0 && p.score==188,"Physical zone claims and banks cargo");
+            p.cargo=11;g.pilots[1].transform.position=p.transform.position;gate.Tick(2);
+            Check(p.cargo==11,"Contested zone blocks deposit");
+            g.Spawn(p);p.invulnerable=0;g.paused=true;float hp=p.health;g.Damage(p,50,bot);
+            Check(p.health==hp,"Pause blocks damage");g.paused=false;
+            Check(ArenaBolt.SegmentDistance(Vector3.zero,Vector3.left*20,Vector3.right*20)<.01f,"Swept projectile collision");
+            g.Spawn(p);p.controls=Vector3.zero;
+            float minAlt=99999,maxSpeed=0;
+            for(int i=0;i<500;i++){p.Simulate(.02f);minAlt=Mathf.Min(minAlt,p.Altitude);maxSpeed=Mathf.Max(maxSpeed,p.Speed);}
+            Check(p.Alive && minAlt>15 && maxSpeed<250,"Ten seconds of neutral flight stays airborne");
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight. Neutral altitude="+p.Altitude.ToString("F1")+" speed="+p.Speed.ToString("F1"));
+        }
+        finally
+        {
+            p.score=oldScore;
+            foreach(var pilot in g.pilots)g.Spawn(pilot);
+            g.paused=wasPaused;g.SnapCamera();
+        }
+    }
+
+    [MenuItem("Rift/Stage atmosphere screenshot")]
+    static void Stage()
+    {
+        var g=AerialCombatPrototype.I;if(!g || !EditorApplication.isPlaying)return;
+        g.paused=false;g.Spawn(g.player);g.player.controls=Vector3.zero;g.SnapCamera();
+        EditorApplication.isPaused=true;
+    }
+    [MenuItem("Rift/Stage suborbital screenshot")]
+    static void High()
+    {
+        var g=AerialCombatPrototype.I;if(!g || !EditorApplication.isPlaying)return;
+        var p=g.player;p.transform.position=new Vector3(0,850,0);
+        p.transform.rotation=Quaternion.Euler(40,30,0);p.velocity=p.transform.forward*125;g.SnapCamera();
+        EditorApplication.isPaused=true;
+    }
+    [MenuItem("Rift/Return to launch")]
+    static void Launch()
+    {
+        var g=AerialCombatPrototype.I;if(!g)return;
+        foreach(var pilot in g.pilots)g.Spawn(pilot);
+        g.paused=false;g.SnapCamera();EditorApplication.isPaused=false;
+    }
+}
