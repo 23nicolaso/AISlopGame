@@ -88,6 +88,10 @@ Pause with Escape and a COMFORT panel appears under the PAUSED text. Three rows,
 - **REDUCE FLASHING** — turns the full-screen damage flash into a constant dim tint and takes the pulse out of the warning text and the overheat bar.
 - **REDUCE CAMERA MOTION** — removes the roll component of impact shake and the field-of-view widening on boost, which are the two things most likely to cause motion discomfort.
 
+## First flight
+
+Under the title block a single OBJECTIVE line walks a new pilot through the loop once: shoot a reactor, fly into what it spills, take it to a ring, hold inside the ring. Each step pops as it clears and a bank from any step ends it with LOOP CLOSED / NOW GO HUNTING. It never shows again on the same machine. The results screen closes every match with four awards under the standings — Top Gun, Big Deposit, Ironclad and Marksman — so a match that was lost on banked score can still have been won somewhere.
+
 ## Vendetta
 
 Whoever shoots you down is marked for sixty seconds: their rankings tag turns red and reads VNDT, a red ring breathes around their aircraft with the seconds left under it, and the feed says VENDETTA and their callsign. Take them down inside the window and whatever they were carrying is paid a second time straight into your banked score, twenty at the least, with a VENDETTA SETTLED line. Somebody else getting there first, or the clock running out, quietly clears it. It is one grudge at a time and it is the only rival the HUD ever tells you to want, so redeploying always comes with a target already chosen.

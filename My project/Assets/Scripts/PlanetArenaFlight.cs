@@ -2,7 +2,7 @@ using UnityEngine;
 
 public partial class ArenaPilot : MonoBehaviour
 {
-    public int id, score, cargo, kills, deaths, generation, streak;
+    public int id, score, cargo, kills, deaths, generation, streak, biggestBank;
     public string callsign;
     public bool isPlayer, boost;
     public Transform art;
@@ -229,7 +229,7 @@ public class SalvageCore : MonoBehaviour
         var g=AerialCombatPrototype.I;
         // Belt armour shrugs off cannon fire; the seeker is what it is priced for, which finally gives the missile a second job.
         if(kind==CoreKind.Armored && !missile) damage*=.3f;
-        health-=damage;
+        health-=damage;if(shooter==g.player)g.playerHitWreck=true;
         g.Feedback("small",transform.position,shooter);
         if(health>0) return;
         // 70 s (was 28): a field has to run dry so its pilots move on. At 28 s every rival camped its home site for
@@ -320,7 +320,8 @@ public class CaptureGate : MonoBehaviour
                 {
                     float rate=(g.aceId==occupant.id?1.5f:1)*(overcharge>0?2:1);
                     int banked=Mathf.RoundToInt(occupant.cargo*rate);
-                    occupant.score+=banked;occupant.cargo=0;
+                    occupant.score+=banked;occupant.cargo=0;occupant.biggestBank=Mathf.Max(occupant.biggestBank,banked);
+                    if(occupant==g.player)g.playerBanked=true;
                     // Four notes for a deposit against the claim's three: the ear can tell the two events apart blind.
                     g.BankArpeggio(occupant==g.player?.45f:.14f);
                     if(occupant==g.player){g.Toast("+"+banked+"  BANKED",new Color(.16f,1,.85f));g.bankPop=.18f;}

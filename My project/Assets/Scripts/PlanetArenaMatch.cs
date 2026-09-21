@@ -44,7 +44,8 @@ public partial class AerialCombatPrototype
             overchargeTimer+=dt;
             if(overchargeTimer>=OverchargeInterval){overchargeTimer-=OverchargeInterval;TriggerOvercharge();}
             // A four-note fanfare under the results panel: the only cue in the game that is allowed to be slow.
-            if(phaseTimer>=MatchLength){phase=MatchPhase.Ended;phaseTimer=0;Banner("MATCH COMPLETE");Chord(stingNote,.22f,.55f,1,1.25f,1.5f,2);}
+            TutorialTick(dt);
+            if(phaseTimer>=MatchLength){phase=MatchPhase.Ended;phaseTimer=0;Banner("MATCH COMPLETE");Chord(stingNote,.22f,.55f,1,1.25f,1.5f,2);ComputeAwards();}
         }
     }
 
@@ -83,7 +84,7 @@ public partial class AerialCombatPrototype
         foreach(var p in pilots)
         {
             p.score=0;p.cargo=0;p.kills=0;p.deaths=0;p.streak=0;
-            p.shotsFired=0;p.combatShotsFired=0;p.hitsLanded=0;
+            p.shotsFired=0;p.combatShotsFired=0;p.hitsLanded=0;p.biggestBank=0;
             Spawn(p,true);
         }
         foreach(var gate in gates){gate.owner=-1;gate.claimant=-1;gate.progress=0;gate.ownerAge=0;gate.payoutFlash=0;gate.overcharge=0;}
@@ -97,6 +98,6 @@ public partial class AerialCombatPrototype
         missileRange=-1;missileBeep=0;overheated=false;lockBeep=0;
         phase=MatchPhase.Countdown;phaseTimer=0;overchargeTimer=0;heartbeatMark=-1;countdownMark=-1;
         // A queued chime from last match's final claim would land over the new countdown; the note queue is board state too.
-        notes.Clear();
+        notes.Clear();awards.Clear();
     }
 }

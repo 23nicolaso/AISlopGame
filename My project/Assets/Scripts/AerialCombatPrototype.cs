@@ -23,6 +23,12 @@ public partial class AerialCombatPrototype : MonoBehaviour
     // window banks their spilled cargo again as a flat bonus (at least VendettaFloor). One personal fight per death.
     public int vendettaId=-1; public float vendettaTimer;
     public const float VendettaWindow=60; public const int VendettaFloor=20;
+    // Onboarding: one objective line that walks a new pilot through the loop once (shoot, scoop, ring, hold), then
+    // never again on this machine. Advanced on the match clock from the flags the game already raises.
+    public int tutorialStep; public float tutorialPop; public bool playerHitWreck, playerBanked;
+    public static readonly string[] Objectives={"SHOOT A REACTOR ON A WRECK","FLY INTO THE SALVAGE IT SPILLS","TAKE IT TO A REFINERY RING","HOLD INSIDE THE RING","LOOP CLOSED   /   NOW GO HUNTING"};
+    // Results-screen awards, computed once when the match ends.
+    public readonly List<string> awards=new List<string>();
     public const int AceStreak=3;
     public Camera cam;
     public UniversalAdditionalCameraData camData;
@@ -93,6 +99,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         I=this;
         Application.runInBackground=true;
         LoadComfort();
+        tutorialStep=PlayerPrefs.GetInt("rift.loopClosed",0)>0?4:0;
         foreach(var c in FindObjectsByType<Camera>()) c.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>()) a.enabled=false;
         foreach(var l in FindObjectsByType<Light>()) l.enabled=false;
@@ -246,6 +253,36 @@ public partial class AerialCombatPrototype : MonoBehaviour
         p.velocity=p.transform.forward*82; p.health=100; p.cargo=0; p.respawn=0; p.invulnerable=3;
         p.throttle=.72f; p.heat=0; p.hullHeat=0; p.fuel=1; p.ResetFlight(); p.art.gameObject.SetActive(true); p.ClearTrails();
         if(p==player) { SnapCamera(); damageFlash=0; lastAttackAge=0; CenterStick(); }
+    }
+
+    public void TutorialTick(float dt)
+    {
+        tutorialPop=Mathf.Max(0,tutorialPop-dt);
+        if(tutorialStep>=4 || !player)return;
+        int before=tutorialStep;
+        if(tutorialStep==0 && playerHitWreck)tutorialStep=1;
+        if(tutorialStep==1 && player.cargo>0)tutorialStep=2;
+        if(tutorialStep==2 && player.cargo>0)foreach(var gate in gates)if(gate.claimant==player.id && gate.progress>0)tutorialStep=3;
+        // A pilot who already knows the game skips straight to the end: any bank closes the loop from any step.
+        if(playerBanked)tutorialStep=4;
+        if(tutorialStep!=before){tutorialPop=tutorialStep==4?4f:.5f;if(tutorialStep==4)PlayerPrefs.SetInt("rift.loopClosed",1);}
+    }
+    // Four lines under the standings: who fought best, who deposited most in one run, who kept their aircraft, who aimed.
+    public void ComputeAwards()
+    {
+        awards.Clear();
+        ArenaPilot topGun=null,banker=null,ironclad=null,marksman=null;
+        foreach(var p in pilots)
+        {
+            if(topGun==null || p.kills>topGun.kills)topGun=p;
+            if(banker==null || p.biggestBank>banker.biggestBank)banker=p;
+            if(ironclad==null || p.deaths<ironclad.deaths)ironclad=p;
+            if(p.combatShotsFired>=20 && (marksman==null || (float)p.hitsLanded/p.combatShotsFired>(float)marksman.hitsLanded/marksman.combatShotsFired))marksman=p;
+        }
+        if(topGun && topGun.kills>0)awards.Add("TOP GUN   "+topGun.callsign.ToUpper()+"   "+topGun.kills+" KILLS");
+        if(banker && banker.biggestBank>0)awards.Add("BIG DEPOSIT   "+banker.callsign.ToUpper()+"   +"+banker.biggestBank);
+        if(ironclad)awards.Add("IRONCLAD   "+ironclad.callsign.ToUpper()+"   "+ironclad.deaths+" LOST");
+        if(marksman)awards.Add("MARKSMAN   "+marksman.callsign.ToUpper()+"   "+Mathf.RoundToInt(100f*marksman.hitsLanded/marksman.combatShotsFired)+"%");
     }
 
     // Trauma accumulates instead of overwriting, so a burst of small hits still reads as one big jolt.

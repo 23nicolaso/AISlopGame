@@ -108,6 +108,28 @@ public static class RiftVerification
             Check(fresh,"Restart returns every pilot and gate to a fresh countdown");
             g.phase=MatchPhase.Playing;g.phaseTimer=0;
 
+            // Onboarding: the objective line advances on the flags the game already raises, and any bank closes it.
+            g.tutorialStep=0;g.tutorialPop=0;g.playerHitWreck=false;g.playerBanked=false;p.cargo=0;
+            g.TutorialTick(.1f);Check(g.tutorialStep==0,"Objective waits for the first reactor hit");
+            g.cores[0].cooldown=0;g.cores[0].health=g.cores[0].maxHealth;g.cores[0].Hit(1,p,false);
+            g.TutorialTick(.1f);Check(g.tutorialStep==1 && g.playerHitWreck,"First reactor hit advances the objective");
+            p.cargo=5;g.TutorialTick(.1f);Check(g.tutorialStep==2,"Carrying salvage advances the objective");
+            var lesson=g.gates[0];foreach(var other in g.pilots)if(other!=p)other.transform.position=lesson.transform.position+Vector3.right*4000;
+            p.transform.position=lesson.transform.position;lesson.owner=-1;lesson.claimant=-1;lesson.progress=0;
+            lesson.Tick(.5f);g.TutorialTick(.1f);Check(g.tutorialStep==3,"Entering a ring with cargo advances the objective");
+            int lessonScore=p.score;lesson.Tick(1.5f);g.TutorialTick(.1f);
+            Check(g.tutorialStep==4 && g.tutorialPop>3 && g.playerBanked && p.score>lessonScore,"Banking closes the loop");
+            g.tutorialStep=4;g.tutorialPop=0;p.cargo=0;lesson.owner=-1;lesson.claimant=-1;lesson.progress=0;lesson.ownerAge=0;
+            g.cores[0].health=g.cores[0].maxHealth;
+
+            // Awards: four deterministic picks from the counters the results screen already has.
+            foreach(var pilot in g.pilots){pilot.kills=0;pilot.deaths=2;pilot.biggestBank=0;pilot.combatShotsFired=0;pilot.hitsLanded=0;}
+            g.pilots[2].kills=4;g.pilots[3].biggestBank=90;g.pilots[4].deaths=0;g.pilots[5].combatShotsFired=40;g.pilots[5].hitsLanded=20;
+            g.ComputeAwards();
+            Check(g.awards.Count==4 && g.awards[0].Contains(g.pilots[2].callsign.ToUpper()) && g.awards[1].Contains("+90") && g.awards[2].Contains(g.pilots[4].callsign.ToUpper()) && g.awards[3].Contains("50%"),"Match awards pick top gun, big deposit, ironclad and marksman");
+            foreach(var pilot in g.pilots){pilot.kills=0;pilot.deaths=0;pilot.biggestBank=0;pilot.combatShotsFired=0;pilot.hitsLanded=0;}
+            g.awards.Clear();
+
             // Information layer: the feed is a four-row window on unscaled time, not a scrollback.
             g.toasts.Clear();
             for(int i=0;i<7;i++)g.Toast("EVENT "+i,Color.white);
@@ -249,7 +271,7 @@ public static class RiftVerification
             Check(g.notes.Count==0,"The note queue drains on TickAudio");
             chimeGate.owner=-1;chimeGate.claimant=-1;chimeGate.progress=0;chimeGate.ownerAge=0;p.cargo=0;
 
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate, banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale, site value bands, per-site wreck counts, engine layer cross-fade, wind bed speed/vacuum gate, claim chime queue and drain, vendetta floor on an empty killer. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate, banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale, site value bands, per-site wreck counts, engine layer cross-fade, wind bed speed/vacuum gate, claim chime queue and drain, vendetta floor on an empty killer, onboarding objective chain, match awards. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
         }
         finally
         {

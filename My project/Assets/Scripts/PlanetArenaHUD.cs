@@ -328,7 +328,7 @@ public partial class AerialCombatPrototype
     void ResultsPanel()
     {
         Box(new Rect(0,0,Width,Height),new Color(.01f,.02f,.05f,.72f));
-        Box(new Rect(340,92,600,516),new Color(.012f,.03f,.055f,.94f));
+        Box(new Rect(340,92,600,598),new Color(.012f,.03f,.055f,.94f));
         Line(new Vector2(340,93),new Vector2(940,93),new Color(1,.74f,.18f,.85f),3);
         Text(new Rect(340,116,600,44),"MATCH COMPLETE",clock);
         if(standings.Count>0)
@@ -355,9 +355,32 @@ public partial class AerialCombatPrototype
             GUI.color=Color.white;
         }
         Line(new Vector2(372,528),new Vector2(908,528),new Color(.3f,.6f,.7f,.35f));
+        // Awards: four things the standings cannot say, in the tag colour so they read as flavour, not as another column.
+        for(int i=0;i<awards.Count && i<4;i++)
+        {
+            GUI.color=i==0?new Color(1,.82f,.4f,.95f):new Color(.63f,.83f,.9f,.9f);
+            Text(new Rect(372,538+i*20,536,20),awards[i],small);
+        }
+        Line(new Vector2(372,622),new Vector2(908,622),new Color(.3f,.6f,.7f,.35f));
         GUI.color=new Color(.9f,.96f,1,.55f+.45f*Mathf.Sin(Time.unscaledTime*3.4f));
-        Text(new Rect(340,552,600,26),"PRESS  ENTER  TO  RESTART",banner);
+        Text(new Rect(340,634,600,26),"PRESS  ENTER  TO  RESTART",banner);
         GUI.color=Color.white;
+    }
+    // One line of onboarding under the title block: the current objective, a pop when it advances, gone for good once
+    // the loop has closed once on this machine.
+    void ObjectiveCard()
+    {
+        if(tutorialStep>=4 && tutorialPop<=0)return;
+        float t=Mathf.Clamp01(1-tutorialPop/(tutorialStep>=4?4f:.5f));
+        float scale=tutorialStep>=4?1:Mathf.Lerp(1.25f,1,1-Mathf.Pow(1-Mathf.Clamp01(t*3),3));
+        float fade=tutorialStep>=4?Mathf.Clamp01(tutorialPop/.6f):1;
+        Matrix4x4 old=GUI.matrix;
+        GUI.matrix=old*Matrix4x4.TRS(new Vector3(142,112,0),Quaternion.identity,new Vector3(scale,scale,1));
+        Box(new Rect(-122,-14,244,28),new Color(.01f,.025f,.045f,.8f*fade));
+        Line(new Vector2(-122,14),new Vector2(122,14),tutorialStep>=4?new Color(1,.74f,.18f,.8f*fade):new Color(.16f,.88f,1,.6f*fade),2);
+        GUI.color=tutorialStep>=4?new Color(1,.88f,.52f,fade):new Color(.63f,.83f,.9f,fade);
+        Text(new Rect(-118,-13,240,26),(tutorialStep>=4?"":"OBJECTIVE   ")+Objectives[Mathf.Clamp(tutorialStep,0,4)],small);
+        GUI.color=Color.white;GUI.matrix=old;
     }
     void Box(Rect r,Color c){GUI.color=c;GUI.DrawTexture(r,Texture2D.whiteTexture);GUI.color=Color.white;}
     void Text(Rect r,string s,GUIStyle style){GUI.Label(r,s,style);}
@@ -436,6 +459,7 @@ public partial class AerialCombatPrototype
         GUI.color=Color.white;
         MatchClock();
         BountyStrip();
+        ObjectiveCard();
 
         if(Time.unscaledTime>standingsRefresh || standings.Count==0)
         {
@@ -605,7 +629,7 @@ public partial class AerialCombatPrototype
             Text(new Rect(525,310,330,48),"REDEPLOYING  "+Mathf.CeilToInt(player.respawn),title);
         }
         if(elapsed<18 || paused)
-            Text(new Rect(30,110,1010,30),"Mouse: pitch / coordinated bank   C: center   WASD: pitch / bank   QE: rudder   Shift / Ctrl: throttle   Space: boost   LMB: cannon   RMB: hold lock, press again to fire",small);
+            Text(new Rect(30,134,1010,30),"Mouse: pitch / coordinated bank   C: center   WASD: pitch / bank   QE: rudder   Shift / Ctrl: throttle   Space: boost   LMB: cannon   RMB: hold lock, press again to fire",small);
         if(phase==MatchPhase.Countdown)CountdownCard();
         else if(phase==MatchPhase.Ended)ResultsPanel();
         if(paused){Text(new Rect(500,340,320,44),"PAUSED  /  ESC",title);ComfortPanel();}
