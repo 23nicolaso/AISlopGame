@@ -23,6 +23,8 @@ public partial class ArenaPilot : MonoBehaviour
     SalvageShard shardTarget;
     CaptureGate gateTarget;
     ArenaPilot rivalTarget;
+    Transform[] plumes;
+    float plumeStretch=1;
     Vector3 angularVelocity;
     Vector3 previousPosition;
     Quaternion previousRotation;
@@ -44,6 +46,17 @@ public partial class ArenaPilot : MonoBehaviour
         var g=AerialCombatPrototype.I;if(!art || !g || g.paused)return;
         Vector3 position;Quaternion rotation;SampleRenderPose(out position,out rotation);
         art.SetPositionAndRotation(position,rotation);
+        if(plumes==null)
+        {
+            var parts=art.GetComponentsInChildren<Transform>();int found=0;
+            foreach(var t in parts)if(t.name=="Exhaust")found++;
+            plumes=new Transform[found];found=0;
+            foreach(var t in parts)if(t.name=="Exhaust")plumes[found++]=t;
+        }
+        // Render-only tell, which is why it lives here and rides Time.deltaTime: the burner plume stretches 2.5x along
+        // its own z off the (.22,.18,1.5) nozzle BuildShip lays down, so boost is legible from behind without a HUD word.
+        plumeStretch=Mathf.Lerp(plumeStretch,boost?2.5f:1,1-Mathf.Exp(-7*Time.deltaTime));
+        foreach(var t in plumes)t.localScale=new Vector3(.22f,.18f,1.5f*plumeStretch);
     }
     public void ResetFlight()
     {
@@ -212,6 +225,8 @@ public class CaptureGate : MonoBehaviour
     public float overcharge;
     public const float Radius=105;
     public LineRenderer ring, progressRing;
+    // The 400 m beacon beam. It is fed by the same MaterialPropertyBlock as the rings, so the owner colour rules live once.
+    public Renderer pillar;
     public Renderer core;
     MaterialPropertyBlock colors;
     public float ownerAge, payoutFlash;
@@ -264,6 +279,7 @@ public class CaptureGate : MonoBehaviour
         if(colors==null)colors=new MaterialPropertyBlock();
         colors.SetColor("_BaseColor",color);
         if(ring)ring.SetPropertyBlock(colors);
+        if(pillar)pillar.SetPropertyBlock(colors);
         if(progressRing)
         {
             int points=Mathf.Max(2,Mathf.RoundToInt(progress*96)); progressRing.positionCount=points;

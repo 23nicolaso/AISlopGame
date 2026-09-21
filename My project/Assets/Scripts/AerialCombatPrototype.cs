@@ -26,12 +26,19 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public string bannerText="";
     public Vector3 lastAttackDirection;
     public Transform world;
+    // Readability landmarks, all generated: the camera-locked sky dome, the cloud cluster root, the surface scatter root.
+    public Transform sky, cloudRoot, scatterRoot;
+    public Material starMaterial;
+    public ParticleSystem windStreaks;
     readonly List<Object> owned = new List<Object>();
-    Material alloy, dark, teal, red, gold, white, violet, slate;
+    Material alloy, dark, teal, red, gold, white, violet, slate, pillarMaterial;
     AudioSource audioSource, engineSource;
     AudioClip gunSound, hitSound, boomSound, collectSound;
     Quaternion cameraRotation;
-    float cameraDistance=20;
+    Vector3 sunDirection=Vector3.up;
+    // 14 m instead of 20: the aircraft has to own a sixth of the frame width, or nothing in the world has a readable scale.
+    float cameraDistance=14;
+    const float CameraLift=3.5f;
     int spawnCounter;
     Vector2 mouseStick;
     const float MouseFlightSensitivity=.42f;
@@ -75,8 +82,11 @@ public partial class AerialCombatPrototype : MonoBehaviour
         RenderSettings.ambientGroundColor=new Color(.36f,.25f,.17f);
         RenderSettings.ambientIntensity=1;
         var sun=new GameObject("Sun").AddComponent<Light>(); sun.transform.SetParent(world);
-        sun.type=LightType.Directional; sun.intensity=1.8f; sun.color=new Color(1,.9f,.78f);
-        sun.transform.rotation=Quaternion.Euler(38,-28,0);
+        sun.type=LightType.Directional; sun.intensity=1.8f; sun.color=new Color(1,.88f,.74f);
+        // 20 degrees of elevation, 32 degrees off the launch heading: low enough to be inside the 66 degree frame from the
+        // chase camera, high enough to key the top surfaces the camera actually sees. Sky and stars read the same vector.
+        sun.transform.rotation=Quaternion.Euler(20,-148,0);
+        sunDirection=-sun.transform.forward;
         cam=new GameObject("Arena chase camera").AddComponent<Camera>(); cam.transform.SetParent(world);
         cam.tag="MainCamera"; cam.clearFlags=CameraClearFlags.SolidColor;
         cam.backgroundColor=new Color(.012f,.025f,.055f); cam.fieldOfView=66; cam.farClipPlane=14000; cam.nearClipPlane=.2f;
@@ -95,12 +105,17 @@ public partial class AerialCombatPrototype : MonoBehaviour
         engineSource.clip=Sound("Engine",1,70,70,.12f); engineSource.volume=.08f; engineSource.Play();
         BuildPlanet();
         BuildSites();
+        // Weather and surface scatter need the refinery positions to keep clear of them, so they build after the sites.
+        BuildClouds();
+        BuildScatter();
+        BuildWindStreaks();
         string[] names={"YOU","Moth.exe","Blue Finch","Periapsis","DustRunner","Kite-09","SoupDragon","Last Comet"};
         for(int i=0;i<names.Length;i++)
         {
             var p=new GameObject(names[i]).AddComponent<ArenaPilot>(); p.transform.SetParent(world);
             p.id=i; p.callsign=names[i]; p.isPlayer=i==0;
-            p.art=BuildShip(p.transform,i!=0);
+            // Visual-only 1.35x: the hit radii (4 m pilot, 9 m wreck) and the hull vertex data stay exactly where they were.
+            p.art=BuildShip(p.transform,i!=0); p.art.localScale=Vector3.one*1.35f;
             pilots.Add(p); if(i==0) player=p;
             Spawn(p,true);
         }
@@ -322,10 +337,11 @@ public partial class AerialCombatPrototype : MonoBehaviour
         if(jitter>0)direction=Quaternion.AngleAxis(Random.Range(-jitter,jitter),Random.onUnitSphere)*direction;
         // Gold tracer marks the bounty from the receiving end too: you can tell who is shooting at you before you turn around.
         Material tracer=p.id==aceId?gold:p.isPlayer?teal:red;
-        var g=Shape(seeker?"Seeker":"Cannon tracer",world,PrimitiveType.Cube,p.transform.position+p.transform.forward*5, new Vector3(.22f,.22f,seeker?2.5f:5),tracer);
+        // .32 cross-section instead of .22: at 100 m a .22 bolt is under two pixels, which reads as nobody shooting at all.
+        var g=Shape(seeker?"Seeker":"Cannon tracer",world,PrimitiveType.Cube,p.transform.position+p.transform.forward*5, new Vector3(.32f,.32f,seeker?2.5f:5),tracer);
         var bolt=g.AddComponent<ArenaBolt>(); bolt.owner=p; bolt.velocity=direction*(seeker?170:360)+p.velocity;
         bolt.target=target; bolt.seeker=seeker;
-        var t=g.AddComponent<TrailRenderer>(); t.sharedMaterial=tracer; t.time=seeker?.6f:.1f; t.startWidth=seeker?.35f:.18f; t.endWidth=0;
+        var t=g.AddComponent<TrailRenderer>(); t.sharedMaterial=tracer; t.time=seeker?.6f:.1f; t.startWidth=seeker?.35f:.3f; t.endWidth=0;
         p.firedRecently=1.5f;
         // Per-shot recoil trauma is small: at 8 shots/s it settles near .2 trauma, which squares down to a faint buzz.
         if(p==player){audioSource.PlayOneShot(gunSound,.4f); Trauma(.03f);}
@@ -409,9 +425,17 @@ public partial class AerialCombatPrototype : MonoBehaviour
         if(!player || !cam) return;
         cameraRotation=player.transform.rotation;
         player.ResetRenderPose();
-        cameraDistance=player.boost?24:20;
+        cameraDistance=player.boost?17:14;
         cam.transform.rotation=cameraRotation*Quaternion.Euler(2,0,0);
-        cam.transform.position=player.transform.position-player.transform.forward*cameraDistance+player.transform.up*5;
+        cam.transform.position=player.transform.position-player.transform.forward*cameraDistance+player.transform.up*CameraLift;
+        FollowSky();
+    }
+    // The dome is a 6 km inverted sphere with no fixed place in the world: it only ever surrounds whatever the camera is.
+    void FollowSky()
+    {
+        if(sky)sky.position=cam.transform.position;
+        // Stars belong to the frame only once the air is too thin to scatter daylight: blind at 150 m, full sky by 600 m.
+        if(starMaterial)starMaterial.SetFloat("_Fade",Mathf.Clamp01((Altitude(cam.transform.position)-150)/450));
     }
     void LateUpdate()
     {
@@ -425,15 +449,30 @@ public partial class AerialCombatPrototype : MonoBehaviour
         shake=Mathf.Max(0,shake-dt*1.3f);
         // One continuous quaternion frame for the entire rig: no conflicting LookRotation up vector.
         cameraRotation=Quaternion.Slerp(cameraRotation,rotation,1-Mathf.Exp(-8*dt));
-        cameraDistance=Mathf.Lerp(cameraDistance,player.boost?24:20,1-Mathf.Exp(-5*dt));
+        cameraDistance=Mathf.Lerp(cameraDistance,player.boost?17:14,1-Mathf.Exp(-5*dt));
         // Squaring trauma keeps chip damage almost still while a kill genuinely kicks the rig.
         float kick=shake*shake*2.6f;
         Vector3 noise=new Vector3(Mathf.PerlinNoise(Time.unscaledTime*19,0)-.5f,Mathf.PerlinNoise(0,Time.unscaledTime*17)-.5f,Mathf.PerlinNoise(Time.unscaledTime*13,7)-.5f)*kick;
-        cam.transform.position=position+cameraRotation*(new Vector3(0,5,-cameraDistance)+noise);
-        // Angular shake reads far harder than translation at a 20 m chase distance, so roll carries most of the punch.
+        // The lift shrinks with the distance (3.5/14 is the old 5/20), so the aircraft keeps its exact place in the frame.
+        cam.transform.position=position+cameraRotation*(new Vector3(0,CameraLift,-cameraDistance)+noise);
+        // Angular shake reads far harder than translation at a 14 m chase distance, so roll carries most of the punch.
         cam.transform.rotation=cameraRotation*Quaternion.Euler(2+noise.y*.9f,noise.x*.9f,noise.z*2.2f);
         cam.fieldOfView=Mathf.Lerp(cam.fieldOfView,player.boost?76:66,1-Mathf.Exp(-3*dt));
+        // Kept as the clear colour behind the dome: if the sky shader ever fails to compile the frame is still flyable.
         cam.backgroundColor=Color.Lerp(new Color(.075f,.19f,.3f),new Color(.003f,.006f,.022f),Mathf.Clamp01(player.Altitude/600));
+        FollowSky();
+        DriveWindStreaks();
+    }
+    // Speed cue, not weather: nothing under 40 m/s, full rate by 160 m/s, doubled on the burner, and gone in vacuum.
+    void DriveWindStreaks()
+    {
+        if(!windStreaks || !player)return;
+        float rate=player.Alive?Mathf.Clamp01((player.Speed-40)/120)*(player.boost?2:1)*Density(Altitude(cam.transform.position))*70:0;
+        var emission=windStreaks.emission; emission.rateOverTime=rate;
+        // World-space drift opposite the aircraft: the streaks stretch along it, which is what sells the direction of travel.
+        Vector3 drift=-player.velocity;
+        var velocity=windStreaks.velocityOverLifetime;
+        velocity.x=new ParticleSystem.MinMaxCurve(drift.x);velocity.y=new ParticleSystem.MinMaxCurve(drift.y);velocity.z=new ParticleSystem.MinMaxCurve(drift.z);
     }
     void OnDestroy()
     {

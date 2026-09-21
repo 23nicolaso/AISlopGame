@@ -11,6 +11,17 @@ Material Material(Color color, bool unlit)
         owned.Add(m); return m;
     }
 
+    // Additive glow that survives a lit sky. _Fade is the material's own opacity, so a per-renderer MaterialPropertyBlock
+    // is free to overwrite _BaseColor without touching it. Falls back to plain Unlit if the shader ever fails to import.
+    Material Additive(Color color,float fade)
+    {
+        var shader=Shader.Find("Rift/Additive");
+        var m=new Material(shader?shader:Shader.Find("Universal Render Pipeline/Unlit"));
+        m.SetColor("_BaseColor",shader?color:color*fade);
+        if(shader)m.SetFloat("_Fade",fade);
+        owned.Add(m); return m;
+    }
+
 public GameObject Shape(string name, Transform parent, PrimitiveType type, Vector3 pos, Vector3 scale, Material mat)
     {
         var g = GameObject.CreatePrimitive(type); g.name = name;
@@ -96,6 +107,11 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         var floor=Ring(t,105,teal,.65f);floor.transform.localRotation=Quaternion.Euler(90,0,0);
         gate.progressRing=Ring(t,88,white,3);gate.progressRing.loop=false;
         Ring(t,112,dark,5);
+        // A 400 m beam standing off the top of the ring along the gate's radial up. It is the only thing that says
+        // "a refinery is here" from 2 km out, and it wears the owner colour the ring already computes every tick.
+        // Neutral cyan is the colour the first Tick would paint it anyway, so the beam is never white for a frame.
+        if(!pillarMaterial)pillarMaterial=Additive(new Color(.1f,.7f,1),.4f);
+        gate.pillar=Shape("Refinery beacon pillar",t,PrimitiveType.Cube,new Vector3(0,310,0),new Vector3(5,400,5),pillarMaterial).GetComponent<Renderer>();
         for(int i=0;i<12;i++)
         {
             float a=i*Mathf.PI*2/12;
@@ -207,15 +223,110 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
             stars.Add(p-right*s);stars.Add(p+up*s);stars.Add(p+right*s);
             triangles.AddRange(new[]{n,n+1,n+2,n+2,n+1,n});
         }
-        MeshPart(world,"Distant stars",Vector3.zero,Vector3.one,stars.ToArray(),triangles.ToArray(),white);
+        // The starfield gets its own additive material so its brightness can be a function of altitude instead of a constant.
+        starMaterial=Additive(new Color(.78f,.88f,1.1f),0);
+        MeshPart(world,"Distant stars",Vector3.zero,Vector3.one,stars.ToArray(),triangles.ToArray(),starMaterial);
         Shape("Moon",world,PrimitiveType.Sphere,new Vector3(-3500,1900,5500),Vector3.one*820,alloy);
-        // Local wisps and sparse aerial debris provide motion references.
-        for(int i=0;i<28;i++)
+
+        var skyShader=Shader.Find("Rift/Sky");
+        if(skyShader)
         {
-            float lat=i*360f/28;
-            var p=SurfacePoint(lat,20*Mathf.Sin(i*2),60);
-            var cloud=Shape("Cloud bank",world,PrimitiveType.Sphere,p,new Vector3(100,5,45),Material(new Color(.46f,.58f,.68f),false));
-            cloud.transform.rotation=Quaternion.FromToRotation(Vector3.up,Up(p));
+            var skyMaterial=new Material(skyShader);owned.Add(skyMaterial);
+            skyMaterial.SetVector("_SunDir",sunDirection);
+            skyMaterial.SetVector("_PlanetCenter",PlanetCenter);skyMaterial.SetFloat("_Radius",PlanetRadius);
+            // 6 km radius, drawn Cull Front in the Background queue with no depth write: it can never clip anything, and
+            // FollowSky() parks it on the camera every frame so the 14 km far plane is never the thing that ends the world.
+            sky=Shape("Sky dome",world,PrimitiveType.Sphere,Vector3.zero,Vector3.one*12000,skyMaterial).transform;
         }
+    }
+
+    // Twenty clusters of overlapping flattened spheres instead of twenty-eight single ellipsoids: one sphere at this size
+    // reads as a grey egg, six overlapping ones read as a cloud. Deterministic seed, because the screenshot runs compare frames.
+    void BuildClouds()
+    {
+        cloudRoot=new GameObject("Arena / weather").transform;cloudRoot.SetParent(world,false);
+        var vapour=new Material(Shader.Find("Universal Render Pipeline/Lit"));owned.Add(vapour);
+        // A cloud is a light trap, not a metal panel: no metallic, almost no smoothness, so it only ever shows the sun's side.
+        vapour.SetColor("_BaseColor",new Color(.78f,.82f,.88f));vapour.color=new Color(.78f,.82f,.88f);
+        vapour.SetFloat("_Metallic",0);vapour.SetFloat("_Smoothness",.06f);
+        var rng=new System.Random(1607);int made=0;
+        for(int attempt=0;attempt<400 && made<20;attempt++)
+        {
+            Vector3 at=SurfacePoint((float)rng.NextDouble()*360,(float)rng.NextDouble()*70-20,40+(float)rng.NextDouble()*70);
+            bool clear=true;
+            // 400 m of clearance from every refinery: a cloud bank parked on a capture ring would hide the whole fight.
+            foreach(var gate in gates) if(Vector3.Distance(at,gate.transform.position)<400) clear=false;
+            if(!clear) continue;
+            made++;
+            var cluster=new GameObject("Cloud bank").transform;cluster.SetParent(cloudRoot,false);
+            cluster.position=at;cluster.rotation=Quaternion.FromToRotation(Vector3.up,Up(at));
+            int puffs=5+rng.Next(3);
+            for(int i=0;i<puffs;i++)
+            {
+                float radius=30+(float)rng.NextDouble()*40;
+                Vector3 offset=new Vector3((float)rng.NextDouble()*130-65,(float)rng.NextDouble()*18-9,(float)rng.NextDouble()*95-48);
+                Shape("Vapour",cluster,PrimitiveType.Sphere,offset,new Vector3(radius,radius*.4f,radius*.78f),vapour);
+            }
+        }
+    }
+
+    // Thirty props inside 350 m of every refinery. Nothing here has collision, by design: the arena has no physics engine,
+    // and the spires are capped at 70 m so the ground furniture always stays under the 155 m salvage decks.
+    void BuildScatter()
+    {
+        scatterRoot=new GameObject("Arena / surface scatter").transform;scatterRoot.SetParent(world,false);
+        // Its own rock material: the hull's dark (.025) turns every spire into a black cutout once the sun is low.
+        var stone=new Material(Shader.Find("Universal Render Pipeline/Lit"));owned.Add(stone);
+        stone.SetColor("_BaseColor",new Color(.21f,.2f,.18f));stone.color=new Color(.21f,.2f,.18f);
+        stone.SetFloat("_Metallic",0);stone.SetFloat("_Smoothness",.12f);
+        var rng=new System.Random(20260921);
+        foreach(var gate in gates)
+        {
+            Vector3 up=Up(gate.transform.position),ground=PlanetCenter+up*PlanetRadius;
+            Vector3 east=Vector3.Cross(up,Vector3.forward).normalized;
+            if(east.sqrMagnitude<.5f)east=Vector3.Cross(up,Vector3.right).normalized;
+            Vector3 north=Vector3.Cross(east,up);
+            for(int i=0;i<30;i++)
+            {
+                float angle=(float)rng.NextDouble()*Mathf.PI*2,distance=90+(float)rng.NextDouble()*260;
+                Vector3 at=PlanetCenter+(ground+(east*Mathf.Cos(angle)+north*Mathf.Sin(angle))*distance-PlanetCenter).normalized*PlanetRadius;
+                Vector3 localUp=Up(at);
+                Quaternion stand=Quaternion.FromToRotation(Vector3.up,localUp)*Quaternion.Euler(0,(float)rng.NextDouble()*360,0);
+                if(i%5==4)
+                {
+                    // One relay mast per five props: a man-made vertical among the rocks, and the only lit thing on the ground.
+                    Shape("Relay mast",scatterRoot,PrimitiveType.Cube,at+localUp*30,new Vector3(2,60,2),slate).transform.rotation=stand;
+                    Shape("Mast beacon",scatterRoot,PrimitiveType.Sphere,at+localUp*61,Vector3.one*3.4f,i%15==4?gold:i%10==4?red:teal);
+                }
+                else
+                {
+                    float height=15+(float)rng.NextDouble()*55,width=6+(float)rng.NextDouble()*12;
+                    var rock=Shape("Basalt spire",scatterRoot,PrimitiveType.Cube,at+localUp*height*.5f,new Vector3(width,height,width*.75f),i%3==0?slate:stone);
+                    rock.transform.rotation=stand*Quaternion.Euler((float)rng.NextDouble()*10-5,0,(float)rng.NextDouble()*10-5);
+                }
+            }
+        }
+    }
+
+    // A ParticleSystem is not the physics engine: this is a render-only speed cue, driven from UpdateChaseCamera's dt.
+    void BuildWindStreaks()
+    {
+        var host=new GameObject("Wind streaks");host.transform.SetParent(cam.transform,false);
+        windStreaks=host.AddComponent<ParticleSystem>();
+        var main=windStreaks.main;
+        main.startLifetime=.45f;main.startSpeed=0;main.startSize=new ParticleSystem.MinMaxCurve(.25f,.7f);
+        main.startColor=new Color(.72f,.84f,1f);main.maxParticles=260;
+        // World space: the streak is spawned around the camera and then left behind by it, which is the whole parallax read.
+        main.simulationSpace=ParticleSystemSimulationSpace.World;main.playOnAwake=true;
+        var emission=windStreaks.emission;emission.rateOverTime=0;
+        var shape=windStreaks.shape;shape.shapeType=ParticleSystemShapeType.Sphere;
+        shape.radius=26;shape.radiusThickness=.7f;shape.position=new Vector3(0,0,19);
+        var velocity=windStreaks.velocityOverLifetime;velocity.enabled=true;velocity.space=ParticleSystemSimulationSpace.World;
+        var size=windStreaks.sizeOverLifetime;size.enabled=true;
+        size.size=new ParticleSystem.MinMaxCurve(1,new AnimationCurve(new Keyframe(0,0),new Keyframe(.35f,1),new Keyframe(1,0)));
+        var renderer=host.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode=ParticleSystemRenderMode.Stretch;renderer.velocityScale=.04f;renderer.lengthScale=2.4f;renderer.cameraVelocityScale=0;
+        renderer.sharedMaterial=Additive(new Color(.62f,.76f,1f),.5f);
+        windStreaks.Play();
     }
 }

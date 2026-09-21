@@ -48,6 +48,10 @@ public static class RiftVerification
             gate.owner=-1;gate.claimant=-1;gate.progress=0;
             gate.Tick(1.5f);
             Check(gate.owner==0 && p.cargo==0 && p.score==188,"Physical zone claims and banks cargo");
+            // The beacon pillar is fed by the ring's own MaterialPropertyBlock, so owning the ring has to repaint the beam.
+            var beam=new MaterialPropertyBlock();gate.pillar.GetPropertyBlock(beam);
+            Color beamColor=beam.GetColor("_BaseColor");
+            Check(beamColor.g>.9f && beamColor.r<.3f,"Beacon pillar wears the ring's owner colour");
             p.cargo=11;g.pilots[1].transform.position=p.transform.position;gate.Tick(2);
             Check(p.cargo==11,"Contested zone blocks deposit");
             g.Spawn(p);p.invulnerable=0;g.paused=true;float hp=p.health;g.Damage(p,50,bot);
@@ -94,6 +98,7 @@ public static class RiftVerification
             p.transform.position=launch;p.transform.rotation=heading;p.velocity=motion;p.cargo=150;
             for(int i=0;i<250;i++)p.Simulate(.02f);
             Check(p.Altitude<lightAltitude-5 && p.Speed<lightSpeed-1,"Full cargo hold flies heavier and slower");
+            float ladenAltitude=p.Altitude,ladenSpeed=p.Speed;
 
             // Overcharge: the surge must land on exactly one reachable ring, and must skip the cycle entirely when
             // every ring is more than 1.5 km from the whole field, because 30 s does not buy a trip around the planet.
@@ -148,7 +153,25 @@ public static class RiftVerification
             Check(suborbital==20 && p.cargo==10,"Suborbital salvage is worth double on pickup");
             p.cargo=0;
 
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+p.Altitude.ToString("F1")+" laden speed="+p.Speed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
+            // Readability pass: every landmark has to exist, and the sky has to be a thing that tracks the camera rather
+            // than a clear colour, or a 2 km approach to a refinery reads as empty space in every direction.
+            foreach(var ring in g.gates)Check(ring.pillar && ring.pillar.enabled,"Every refinery raises a beacon pillar");
+            Check(g.scatterRoot && g.scatterRoot.childCount>=150,"Surface scatter populates every site");
+            Check(g.cloudRoot && g.cloudRoot.childCount>=18 && g.cloudRoot.childCount<=22,"Cloud banks build as clusters");
+            foreach(Transform cluster in g.cloudRoot)
+                foreach(var ring in g.gates)
+                    Check(Vector3.Distance(cluster.position,ring.transform.position)>400,"Cloud banks clear every refinery");
+            Check(g.sky && g.starMaterial,"Sky dome and starfield exist");
+            g.Spawn(p);p.transform.position=new Vector3(0,100,0);p.ResetRenderPose();
+            g.UpdateChaseCamera(.02f,p.transform.position,p.transform.rotation);
+            Check(Vector3.Distance(g.sky.position,g.cam.transform.position)<.01f,"Sky dome follows the camera");
+            float lowStars=g.starMaterial.GetFloat("_Fade");
+            p.transform.position=new Vector3(0,800,0);p.ResetRenderPose();
+            g.UpdateChaseCamera(.02f,p.transform.position,p.transform.rotation);
+            float highStars=g.starMaterial.GetFloat("_Fade");
+            Check(lowStars<.05f && highStars>.95f,"Stars fade in with altitude");
+
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
         }
         finally
         {
