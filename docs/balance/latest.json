@@ -1,0 +1,50 @@
+{
+ "generated": "2026-09-21T06:04:02.1376630Z",
+ "dt": 0.020,
+ "matches": [
+  {"index": 0, "standIn": "HUNT", "length": 302.4, "kills": 1, "crashes": 14, "banks": 8, "claims": 11, "overcharges": 4, "overchargeBanks": 1, "firstKillAt": 7.4, "killsPerMinute": [1],
+   "pilots": [
+    {"callsign": "YOU", "tag": "HUNT", "banked": 116, "kills": 1, "deaths": 1, "shotDown": 0, "crashes": 0, "burns": 1, "banks": 1, "claims": 1, "cargoLost": 0, "peakCargo": 264, "aliveTime": 296, "timeCarrying": 30, "shots": 31, "combatShots": 10, "hits": 10, "firstKillAt": 7.4},
+    {"callsign": "Moth.exe", "tag": "HUNT", "banked": 25, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 0, "claims": 1, "cargoLost": 0, "peakCargo": 0, "aliveTime": 293, "timeCarrying": 0, "shots": 7, "combatShots": 6, "hits": 1, "firstKillAt": -1.0},
+    {"callsign": "Blue Finch", "tag": "HORD", "banked": 278, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 1, "claims": 2, "cargoLost": 0, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 95, "shots": 12, "combatShots": 0, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "Periapsis", "tag": "VULT", "banked": 242, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 2, "claims": 2, "cargoLost": 0, "peakCargo": 56, "aliveTime": 293, "timeCarrying": 141, "shots": 17, "combatShots": 9, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "DustRunner", "tag": "STDY", "banked": 371, "kills": 0, "deaths": 1, "shotDown": 0, "crashes": 0, "burns": 1, "banks": 1, "claims": 1, "cargoLost": 0, "peakCargo": 168, "aliveTime": 296, "timeCarrying": 75, "shots": 12, "combatShots": 6, "hits": 3, "firstKillAt": -1.0},
+    {"callsign": "Kite-09", "tag": "AVNG", "banked": 151, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 1, "claims": 1, "cargoLost": 0, "peakCargo": 56, "aliveTime": 293, "timeCarrying": 96, "shots": 9, "combatShots": 5, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "SoupDragon", "tag": "ROOK", "banked": 243, "kills": 0, "deaths": 3, "shotDown": 0, "crashes": 0, "burns": 3, "banks": 1, "claims": 2, "cargoLost": 336, "peakCargo": 168, "aliveTime": 290, "timeCarrying": 156, "shots": 23, "combatShots": 5, "hits": 2, "firstKillAt": -1.0},
+    {"callsign": "Last Comet", "tag": "ELIT", "banked": 141, "kills": 0, "deaths": 2, "shotDown": 1, "crashes": 0, "burns": 1, "banks": 1, "claims": 1, "cargoLost": 0, "peakCargo": 56, "aliveTime": 293, "timeCarrying": 51, "shots": 21, "combatShots": 17, "hits": 0, "firstKillAt": -1.0}
+   ]},
+  {"index": 1, "standIn": "HORD", "length": 302.2, "kills": 0, "crashes": 16, "banks": 7, "claims": 10, "overcharges": 4, "overchargeBanks": 1, "firstKillAt": -1.0, "killsPerMinute": [],
+   "pilots": [
+    {"callsign": "YOU", "tag": "HORD", "banked": 133, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 1, "claims": 1, "cargoLost": 0, "peakCargo": 88, "aliveTime": 294, "timeCarrying": 2, "shots": 21, "combatShots": 10, "hits": 6, "firstKillAt": -1.0},
+    {"callsign": "Moth.exe", "tag": "HUNT", "banked": 182, "kills": 0, "deaths": 3, "shotDown": 0, "crashes": 0, "burns": 3, "banks": 2, "claims": 2, "cargoLost": 0, "peakCargo": 56, "aliveTime": 290, "timeCarrying": 44, "shots": 28, "combatShots": 23, "hits": 1, "firstKillAt": -1.0},
+    {"callsign": "Blue Finch", "tag": "HORD", "banked": 110, "kills": 0, "deaths": 1, "shotDown": 0, "crashes": 0, "burns": 1, "banks": 0, "claims": 1, "cargoLost": 0, "peakCargo": 168, "aliveTime": 296, "timeCarrying": 143, "shots": 8, "combatShots": 2, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "Periapsis", "tag": "VULT", "banked": 333, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 2, "claims": 2, "cargoLost": 0, "peakCargo": 56, "aliveTime": 293, "timeCarrying": 158, "shots": 27, "combatShots": 19, "hits": 3, "firstKillAt": -1.0},
+    {"callsign": "DustRunner", "tag": "STDY", "banked": 0, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 0, "claims": 0, "cargoLost": 168, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 116, "shots": 18, "combatShots": 6, "hits": 4, "firstKillAt": -1.0},
+    {"callsign": "Kite-09", "tag": "AVNG", "banked": 91, "kills": 0, "deaths": 3, "shotDown": 0, "crashes": 1, "burns": 2, "banks": 1, "claims": 1, "cargoLost": 112, "peakCargo": 56, "aliveTime": 290, "timeCarrying": 227, "shots": 23, "combatShots": 11, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "SoupDragon", "tag": "ROOK", "banked": 313, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 1, "claims": 2, "cargoLost": 168, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 158, "shots": 16, "combatShots": 4, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "Last Comet", "tag": "ELIT", "banked": 30, "kills": 0, "deaths": 1, "shotDown": 0, "crashes": 0, "burns": 1, "banks": 0, "claims": 1, "cargoLost": 0, "peakCargo": 0, "aliveTime": 296, "timeCarrying": 0, "shots": 32, "combatShots": 32, "hits": 7, "firstKillAt": -1.0}
+   ]},
+  {"index": 2, "standIn": "VULT", "length": 302.3, "kills": 1, "crashes": 16, "banks": 8, "claims": 10, "overcharges": 4, "overchargeBanks": 3, "firstKillAt": 210.0, "killsPerMinute": [0,0,0,1],
+   "pilots": [
+    {"callsign": "YOU", "tag": "VULT", "banked": 156, "kills": 0, "deaths": 1, "shotDown": 0, "crashes": 0, "burns": 1, "banks": 1, "claims": 2, "cargoLost": 0, "peakCargo": 56, "aliveTime": 296, "timeCarrying": 56, "shots": 30, "combatShots": 18, "hits": 9, "firstKillAt": -1.0},
+    {"callsign": "Moth.exe", "tag": "HUNT", "banked": 133, "kills": 0, "deaths": 3, "shotDown": 0, "crashes": 0, "burns": 3, "banks": 1, "claims": 1, "cargoLost": 0, "peakCargo": 88, "aliveTime": 290, "timeCarrying": 2, "shots": 50, "combatShots": 45, "hits": 1, "firstKillAt": -1.0},
+    {"callsign": "Blue Finch", "tag": "HORD", "banked": 406, "kills": 0, "deaths": 2, "shotDown": 1, "crashes": 0, "burns": 1, "banks": 1, "claims": 2, "cargoLost": 168, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 123, "shots": 12, "combatShots": 0, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "Periapsis", "tag": "VULT", "banked": 369, "kills": 1, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 3, "claims": 2, "cargoLost": 168, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 124, "shots": 26, "combatShots": 13, "hits": 10, "firstKillAt": 210.0},
+    {"callsign": "DustRunner", "tag": "STDY", "banked": 0, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 0, "claims": 0, "cargoLost": 168, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 116, "shots": 15, "combatShots": 3, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "Kite-09", "tag": "AVNG", "banked": 141, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 1, "claims": 1, "cargoLost": 0, "peakCargo": 56, "aliveTime": 293, "timeCarrying": 141, "shots": 8, "combatShots": 0, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "SoupDragon", "tag": "ROOK", "banked": 248, "kills": 0, "deaths": 3, "shotDown": 0, "crashes": 0, "burns": 3, "banks": 1, "claims": 2, "cargoLost": 336, "peakCargo": 168, "aliveTime": 290, "timeCarrying": 89, "shots": 12, "combatShots": 0, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "Last Comet", "tag": "ELIT", "banked": 0, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 1, "burns": 1, "banks": 0, "claims": 0, "cargoLost": 0, "peakCargo": 0, "aliveTime": 293, "timeCarrying": 0, "shots": 36, "combatShots": 36, "hits": 4, "firstKillAt": -1.0}
+   ]},
+  {"index": 3, "standIn": "STDY", "length": 302.3, "kills": 2, "crashes": 16, "banks": 5, "claims": 6, "overcharges": 4, "overchargeBanks": 1, "firstKillAt": 7.4, "killsPerMinute": [1,0,0,1],
+   "pilots": [
+    {"callsign": "YOU", "tag": "STDY", "banked": 274, "kills": 1, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 2, "claims": 1, "cargoLost": 192, "peakCargo": 192, "aliveTime": 293, "timeCarrying": 124, "shots": 37, "combatShots": 12, "hits": 11, "firstKillAt": 7.4},
+    {"callsign": "Moth.exe", "tag": "HUNT", "banked": 0, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 0, "claims": 0, "cargoLost": 56, "peakCargo": 56, "aliveTime": 293, "timeCarrying": 172, "shots": 22, "combatShots": 14, "hits": 1, "firstKillAt": -1.0},
+    {"callsign": "Blue Finch", "tag": "HORD", "banked": 70, "kills": 0, "deaths": 3, "shotDown": 0, "crashes": 0, "burns": 3, "banks": 0, "claims": 1, "cargoLost": 336, "peakCargo": 168, "aliveTime": 290, "timeCarrying": 128, "shots": 21, "combatShots": 3, "hits": 2, "firstKillAt": -1.0},
+    {"callsign": "Periapsis", "tag": "VULT", "banked": 137, "kills": 1, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 1, "claims": 1, "cargoLost": 56, "peakCargo": 112, "aliveTime": 293, "timeCarrying": 254, "shots": 19, "combatShots": 11, "hits": 6, "firstKillAt": 223.3},
+    {"callsign": "DustRunner", "tag": "STDY", "banked": 0, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 0, "claims": 0, "cargoLost": 168, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 117, "shots": 18, "combatShots": 6, "hits": 4, "firstKillAt": -1.0},
+    {"callsign": "Kite-09", "tag": "AVNG", "banked": 0, "kills": 0, "deaths": 2, "shotDown": 1, "crashes": 0, "burns": 1, "banks": 0, "claims": 0, "cargoLost": 56, "peakCargo": 56, "aliveTime": 293, "timeCarrying": 265, "shots": 8, "combatShots": 0, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "SoupDragon", "tag": "ROOK", "banked": 288, "kills": 0, "deaths": 2, "shotDown": 0, "crashes": 0, "burns": 2, "banks": 1, "claims": 2, "cargoLost": 168, "peakCargo": 168, "aliveTime": 293, "timeCarrying": 69, "shots": 12, "combatShots": 0, "hits": 0, "firstKillAt": -1.0},
+    {"callsign": "Last Comet", "tag": "ELIT", "banked": 141, "kills": 0, "deaths": 3, "shotDown": 1, "crashes": 0, "burns": 2, "banks": 1, "claims": 1, "cargoLost": 56, "peakCargo": 56, "aliveTime": 290, "timeCarrying": 121, "shots": 32, "combatShots": 24, "hits": 5, "firstKillAt": -1.0}
+   ]}
+ ]
+}

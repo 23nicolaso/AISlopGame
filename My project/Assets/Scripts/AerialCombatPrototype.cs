@@ -436,7 +436,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         }
         // Signature aim error: the rookie sprays four degrees wide of what the ace does, and it is applied after the
         // firing solution passes its angle gate so a jittery pilot still shoots, it just does not shoot straight.
-        float jitter=p.isPlayer?0:p.Profile.aimJitter;
+        float jitter=p.isPlayer && p.autopilot<0?0:p.Profile.aimJitter;
         if(jitter>0)direction=Quaternion.AngleAxis(Random.Range(-jitter,jitter),Random.onUnitSphere)*direction;
         // The player's version of that error is earned, not innate: a cold gun is exact, a gun held at the overheat gate
         // throws two degrees wide. The deflection axis is perpendicular to the bore, so a 2 degree cone really is 2 wide.

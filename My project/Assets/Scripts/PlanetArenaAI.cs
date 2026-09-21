@@ -28,7 +28,7 @@ public partial class ArenaPilot
 {
     public string tactic="Salvage";
     public ArenaPilot CombatTarget => rivalTarget;
-    public ArenaPersonality Profile => ArenaPersonality.For(id);
+    public ArenaPersonality Profile => ArenaPersonality.For(autopilot>=0?autopilot:id);
     ArenaPilot aggressor, alertTarget;
     float retaliation, engagement, combatRest, breakTime, burstTime, burstRest, alertTimer, searchTimer;
     Vector3 breakDirection, searchDirection, lastKnownPosition;

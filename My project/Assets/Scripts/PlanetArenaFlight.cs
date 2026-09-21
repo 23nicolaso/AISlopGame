@@ -15,6 +15,7 @@ public partial class ArenaPilot : MonoBehaviour
     public float lockTimer;
     // 1.2 s of continuous tracking. Long enough that a missile is a decision, short enough to land inside one firing pass.
     public const float LockTime=1.2f;
+    public int autopilot=-1;
     float burnBank;
     // Decays on simulation dt, not wall clock, so rivals hearing gunfire stays deterministic under the verification harness.
     public float firedRecently;
@@ -100,7 +101,8 @@ public partial class ArenaPilot : MonoBehaviour
         seekerCooldown=Mathf.Max(0,seekerCooldown-dt);
         heat=Mathf.Max(0,heat-dt*.22f);
         firedRecently=Mathf.Max(0,firedRecently-dt);
-        if(!isPlayer) Think(dt);
+        // autopilot>=0 hands the player's airframe to a rival personality: the balance harness flies whole matches with it.
+        if(!isPlayer || autopilot>=0) Think(dt);
         else TrackLock(dt);
 
         Vector3 up=AerialCombatPrototype.Up(transform.position);
