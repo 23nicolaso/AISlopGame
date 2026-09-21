@@ -636,6 +636,8 @@ public partial class AerialCombatPrototype
             if(player.Speed<45 && player.Altitude<500)Warning(ref warning,"STALL",new Color(1,.85f,.4f));
             if(player.Altitude<40)Warning(ref warning,"PULL UP",new Color(1,.34f,.18f));
             if(player.hullHeat>1)Warning(ref warning,"RE-ENTRY",new Color(1,.46f,.1f));
+            // Unbanked cargo is worth nothing at the buzzer; the last 30 s say so where the eye already is.
+            if(phase==MatchPhase.Playing && MatchRemaining<30 && player.cargo>0)Warning(ref warning,"BANK BEFORE THE BUZZER",new Color(1,.84f,.35f));
             if(lastAttackAge>0 && lastAttackDirection.sqrMagnitude>.01f)
             {
                 Vector3 local=cam.transform.InverseTransformDirection(lastAttackDirection);

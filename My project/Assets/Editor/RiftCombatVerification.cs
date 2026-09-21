@@ -284,6 +284,17 @@ public static class RiftCombatVerification
             bot.health=100;bot.invulnerable=0;g.Kill(bot,g.pilots[5]);
             Check(g.aceId==-1 && bot.streak==0,"Killing the ace clears the bounty");
 
+            // The buzzer: with 20 s left, a rival holding cargo below its banking threshold runs for a ring anyway.
+            ClearBolts();Place(bot,new Vector3(0,300,0),Quaternion.identity);bot.cargo=5;
+            foreach(var other in g.pilots)if(other!=bot)Place(other,new Vector3(6000+other.id*1500,2500,0),Quaternion.identity);
+            g.phaseTimer=AerialCombatPrototype.MatchLength-200;
+            for(int i=0;i<30;i++)bot.Simulate(.02f);
+            Check(bot.GateTarget==null,"Below the banking threshold with time left, no ring run");
+            g.phaseTimer=AerialCombatPrototype.MatchLength-20;
+            for(int i=0;i<30;i++)bot.Simulate(.02f);
+            Check(bot.GateTarget!=null,"Inside the last 30 s any cargo triggers a ring run");
+            g.phaseTimer=0;bot.cargo=0;
+
             // Vendetta: the killer is marked, settling it inside the window pays max(20, spoils) straight to banked score,
             // and an unsettled mark lapses on the match clock.
             g.vendettaId=-1;g.vendettaTimer=0;p.health=100;p.invulnerable=0;bot.health=100;bot.invulnerable=0;
@@ -297,7 +308,7 @@ public static class RiftCombatVerification
             Check(g.vendettaId==-1 && g.vendettaTimer<=0,"An unsettled vendetta lapses after sixty seconds");
             p.health=100;p.invulnerable=0;bot.health=100;bot.invulnerable=0;
 
-            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; precision 1.75x band; boost halves seeker turn rate; auto-level on a released stick and its off switch; coordinated mouse rudder versus uncoupled keyboard bank; heat-widened cannon spread and a cold bore; seeker lock timing and cone drop-out; safe redeploy spacing; crash versus shot-down debris; ace bounty crowning and clearing; vendetta mark, settlement and lapse. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1")+", graze damage="+grazeDamage.ToString("F2")+" vs wide="+wideDamage.ToString("F2")+", seeker turn cold="+coldTurn.ToString("F2")+" deg vs burner="+burnerTurn.ToString("F2")+" deg, bank after 3 s assisted="+assisted.ToString("F1")+" deg vs unassisted="+unassisted.ToString("F1")+" deg, spread hot="+hotSpread.ToString("F2")+" deg vs cold="+coldSpread.ToString("F3")+" deg, lock="+lockReached.ToString("F2")+" s dropped in "+lockDropSteps+" step(s), redeploy gap="+redeployGap.ToString("F0")+" m, crash debris="+crashPieces+" vs shot-down="+hotPieces;
+            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; precision 1.75x band; boost halves seeker turn rate; auto-level on a released stick and its off switch; coordinated mouse rudder versus uncoupled keyboard bank; heat-widened cannon spread and a cold bore; seeker lock timing and cone drop-out; safe redeploy spacing; crash versus shot-down debris; ace bounty crowning and clearing; buzzer ring run; vendetta mark, settlement and lapse. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1")+", graze damage="+grazeDamage.ToString("F2")+" vs wide="+wideDamage.ToString("F2")+", seeker turn cold="+coldTurn.ToString("F2")+" deg vs burner="+burnerTurn.ToString("F2")+" deg, bank after 3 s assisted="+assisted.ToString("F1")+" deg vs unassisted="+unassisted.ToString("F1")+" deg, spread hot="+hotSpread.ToString("F2")+" deg vs cold="+coldSpread.ToString("F3")+" deg, lock="+lockReached.ToString("F2")+" s dropped in "+lockDropSteps+" step(s), redeploy gap="+redeployGap.ToString("F0")+" m, crash debris="+crashPieces+" vs shot-down="+hotPieces;
         }
         finally
         {

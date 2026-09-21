@@ -33,7 +33,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     // Results-screen awards, computed once when the match ends.
     public readonly List<string> awards=new List<string>();
     // Standalone player only: -rift-screenshot=<png> captures the full frame with the HUD 4.5 s in, then quits a second later.
-    string screenshotPath,hideForCapture=""; float quitAt;
+    string screenshotPath,hideForCapture=""; float quitAt,frameSum; int frameCount;
     public const int AceStreak=3;
     public Camera cam;
     public UniversalAdditionalCameraData camData;
@@ -654,8 +654,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
             TickAudio(0); return;
         }
         float dt=Time.deltaTime; elapsed+=dt; MatchTick(dt);
+        if(screenshotPath!=null){frameSum+=Time.unscaledDeltaTime;frameCount++;}
         if(screenshotPath!=null && elapsed>4.5f)
         {
+            Debug.Log("[SHOT] frame time avg "+(1000*frameSum/Mathf.Max(1,frameCount)).ToString("F1")+" ms over "+frameCount+" frames at "+Screen.width+"x"+Screen.height);
             // -rift-hide=trails,wind,plume: an A/B switch for reading a capture, so a visual can be attributed by elimination.
             if(hideForCapture.Contains("trails"))foreach(var t in player.GetComponentsInChildren<TrailRenderer>()){t.emitting=false;t.Clear();}
             if(hideForCapture.Contains("wind") && windStreaks){windStreaks.Stop();windStreaks.Clear();}

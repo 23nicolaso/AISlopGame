@@ -116,7 +116,9 @@ public partial class ArenaPilot
             var surge=arena.OverchargedGate();
             // The ring is latched once chosen: with fields 670 m apart two rings are often equidistant, and re-picking the
             // nearest every 0.3 s had laden pilots zig-zagging between a 170 m ring and a 460 m ring for minutes.
-            gateTarget=avenging?null:surge && cargo>=15?surge:(cargo>=Profile.bankAt || repairing)?(gateTarget?gateTarget:arena.NearestGate(transform.position)):null;
+            // The buzzer: inside the last 30 s any cargo at all is worth a run at the nearest ring, whatever the temperament.
+            bool buzzer=arena.phase==MatchPhase.Playing && arena.MatchRemaining<30 && cargo>0;
+            gateTarget=avenging?null:surge && cargo>=15?surge:(cargo>=Profile.bankAt || repairing || buzzer)?(gateTarget?gateTarget:arena.NearestGate(transform.position)):null;
             if(gateTarget && cargo==0 && health>=85)gateTarget=null;
             // Retaliation also waits out the reaction delay, otherwise a blind-side hit would be answered instantly.
             bool retaliate=!repairing && retaliation>0 && alertTimer<=0 && CanEngage(aggressor,900);
