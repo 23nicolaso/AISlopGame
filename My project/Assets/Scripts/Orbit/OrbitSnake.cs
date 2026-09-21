@@ -36,6 +36,9 @@ public partial class OrbitSnake : MonoBehaviour
     public string toast=""; public float toastTimer; public readonly List<string> feed=new();
     public float ejectPulse, strikePulse, catchPulse; public int lastEjected;
     System.Random rng;
+    // Built player: -orbit-screenshot=<png> captures the full frame with the IMGUI HUD 3 s in (Camera.Render in the
+    // Editor cannot see OnGUI), on a scripted weave with a starter train, then quits.
+    string screenshotPath; bool shotTaken;
 
     public static float ShellRadius(int level) => PlanetRadius+ShellAltitude[Mathf.Clamp(level,0,ShellAltitude.Length-1)];
 
@@ -50,6 +53,7 @@ public partial class OrbitSnake : MonoBehaviour
     {
         if(I&&I!=this){Destroy(gameObject);return;}
         I=this; Application.runInBackground=true;
+        foreach(var arg in System.Environment.GetCommandLineArgs())if(arg.StartsWith("-orbit-screenshot="))screenshotPath=arg.Substring(18);
         foreach(var c in FindObjectsByType<Camera>())c.enabled=false;
         foreach(var l in FindObjectsByType<Light>())l.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>())a.enabled=false;
@@ -155,6 +159,14 @@ public partial class OrbitSnake : MonoBehaviour
 
     void Update()
     {
+        if(screenshotPath!=null)
+        {
+            if(ship.segments.Count==0&&elapsed<.1f)for(int i=0;i<5;i++)ship.AddSegment();
+            ship.turn=Mathf.Sin(elapsed*1.5f);
+            if(!shotTaken&&elapsed>3){ ScreenCapture.CaptureScreenshot(screenshotPath); shotTaken=true; Debug.Log("[SHOT] HUD capture -> "+screenshotPath); }
+            if(shotTaken&&elapsed>4.5f)Application.Quit();
+            return;
+        }
         var k=Keyboard.current; if(k==null)return;
         if(k.escapeKey.wasPressedThisFrame&&!ended)paused=!paused;
         if(ended&&k.enterKey.wasPressedThisFrame)Restart((int)(Time.realtimeSinceStartup*1000)&0xffff);

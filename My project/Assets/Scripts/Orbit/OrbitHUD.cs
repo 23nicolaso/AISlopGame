@@ -25,7 +25,7 @@ public partial class OrbitSnake
         int quota=level<EjectQuota.Length?EjectQuota[level]:0; int n=ship.segments.Count; bool ready=quota>0&&n>=quota;
         Box(new Rect(Width*.5f-220,Height-92,440,64),new Color(0,0,0,.5f));
         float fill=quota>0?Mathf.Clamp01(n/(float)quota):1; Box(new Rect(Width*.5f-208,Height-58,416,10),new Color(1,1,1,.12f)); Box(new Rect(Width*.5f-208,Height-58,416*fill,10),ready?new Color(.35f,1,.5f):new Color(.55f,.8f,1));
-        GUI.Label(new Rect(Width*.5f-208,Height-90,416,30),ready?"TRAIN "+n+"  —  SPACE to eject and climb  (x"+(n*n*5+50*(level+1))+")":"TRAIN "+n+" / "+quota,mono);
+        GUI.Label(new Rect(Width*.5f-208,Height-90,416,30),ready?"TRAIN "+n+"  —  SPACE to eject and climb  (+"+(n*n*5+50*(level+1))+")":"TRAIN "+n+" / "+quota,mono);
         // Toast and feed.
         if(toastTimer>0){ Box(new Rect(Width*.5f-400,110,800,40),new Color(0,0,0,Mathf.Min(.6f,toastTimer))); GUI.color=new Color(1,1,1,Mathf.Min(1,toastTimer)); GUI.Label(new Rect(Width*.5f-390,112,780,36),toast,mono); GUI.color=Color.white; }
         for(int i=0;i<feed.Count;i++){ GUI.color=new Color(1,1,1,.35f+.1f*i); GUI.Label(new Rect(24,Height-40-(feed.Count-1-i)*20,700,20),feed[i],small); } GUI.color=Color.white;
