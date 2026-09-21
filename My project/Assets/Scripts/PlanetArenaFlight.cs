@@ -8,6 +8,9 @@ public partial class ArenaPilot : MonoBehaviour
     public Transform art;
     public Vector3 velocity, controls;
     public float health=100, throttle=.72f, heat, fuel=1, respawn, invulnerable, fireCooldown, seekerCooldown;
+    // Airframe temperature, distinct from the weapon's heat above: this one is earned by coming down too fast.
+    public float hullHeat;
+    float burnBank;
     // Decays on simulation dt, not wall clock, so rivals hearing gunfire stays deterministic under the verification harness.
     public float firedRecently;
     public bool recovering;
@@ -46,6 +49,7 @@ public partial class ArenaPilot : MonoBehaviour
     {
         angularVelocity=Vector3.zero;controls=Vector3.zero;boost=false;
         fireCooldown=0;seekerCooldown=0;decision=0;firedRecently=0;recovering=false;
+        hullHeat=0;burnBank=0;
         coreTarget=null;shardTarget=null;gateTarget=null;rivalTarget=null;
         ResetTactics();ResetRenderPose();
     }
@@ -82,6 +86,18 @@ public partial class ArenaPilot : MonoBehaviour
         Vector3 up=AerialCombatPrototype.Up(transform.position);
         float density=AerialCombatPrototype.Density(Altitude);
         float speed=Speed;
+        // Re-entry heating goes with the cube of the descent rate, the way convective heating really does, so a slow
+        // spiral never out-runs the constant .3/s cooling and only a committed plunge into thick air can build.
+        // Capped at 2 so a bad re-entry costs a third of the hull instead of being unrecoverable.
+        float plunge=-Vector3.Dot(velocity,up)/100f;
+        hullHeat=Mathf.Clamp(hullHeat+((plunge>0?plunge*plunge*plunge*density*3.2f:0)-.3f)*dt,0,2);
+        if(hullHeat>1 && invulnerable<=0 && arena.MatchActive)
+        {
+            // Burn is banked into 4-point bites: 8/s through Damage() every step would fire the feedback layer 50 times a second.
+            burnBank+=dt*8;
+            if(burnBank>=4){burnBank-=4;arena.Damage(this,4,null);if(!Alive)return;}
+        }
+        else burnBank=0;
         // One rotation channel for everyone: AI writes the same -1..1 controls the mouse and keyboard write.
         float authority=Mathf.Lerp(.4f,1,Mathf.Clamp01(speed/65)*density);
         // A pull-up from a terrain prediction is allowed to cheat the air: it is a survival reflex, not a dogfight advantage.

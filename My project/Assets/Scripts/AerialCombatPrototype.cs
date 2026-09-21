@@ -143,7 +143,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         Vector3 direction=nearest ? nearest.transform.position-pos : Vector3.forward;
         p.transform.rotation=Quaternion.LookRotation(Vector3.ProjectOnPlane(direction,Up(pos)).normalized,Up(pos));
         p.velocity=p.transform.forward*82; p.health=100; p.cargo=0; p.respawn=0; p.invulnerable=3;
-        p.throttle=.72f; p.heat=0; p.fuel=1; p.ResetFlight(); p.art.gameObject.SetActive(true); p.ClearTrails();
+        p.throttle=.72f; p.heat=0; p.hullHeat=0; p.fuel=1; p.ResetFlight(); p.art.gameObject.SetActive(true); p.ClearTrails();
         if(p==player) { SnapCamera(); damageFlash=0; lastAttackAge=0; CenterStick(); }
     }
 
@@ -210,7 +210,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         {
             damageFlash=.5f;
             if(attacker && attacker!=victim) { RecordIncoming(attacker.transform.position); Banner("SPLASHED BY  "+attacker.callsign); }
-            else Banner("TERRAIN IMPACT");
+            else Banner(victim.hullHeat>1?"HULL BURNED THROUGH":"TERRAIN IMPACT");
         }
         else if(attacker==player) Banner("SPLASHED  "+victim.callsign+"   +"+spoils+" SALVAGE");
     }
@@ -265,7 +265,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
     {
         if(!p.Alive || !s || s.claimed || paused || !MatchActive) return;
         Vector3 at=s.transform.position;
-        s.claimed=true; p.cargo+=s.value; shards.Remove(s); Destroy(s.gameObject);
+        // Salvage taken above the coast line is worth double, judged on the collector's own altitude rather than the
+        // shard's: shards drift to whoever is nearest, so the only honest question is who has to fly it back down.
+        s.claimed=true; p.cargo+=p.Altitude>550?s.value*2:s.value; shards.Remove(s); Destroy(s.gameObject);
         Feedback("small",at,p,collectSound);
     }
 

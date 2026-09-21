@@ -35,6 +35,13 @@ public partial class AerialCombatPrototype
         Line(c+d*118-n*20,c+d*146,new Color(1,.3f,.16f,alpha*.5f),2);
         Line(c+d*146,c+d*118+n*20,new Color(1,.3f,.16f,alpha*.5f),2);
     }
+    // Warnings stack upward from a single slot, so three of them at once never print on top of each other.
+    void Warning(ref int slot,string text,Color c)
+    {
+        float y=Height-170-slot*33;slot++;
+        GUI.color=new Color(c.r,c.g,c.b,.6f+.4f*Mathf.Sin(Time.unscaledTime*7));
+        Text(new Rect(530,y,300,28),text,normal);GUI.color=Color.white;
+    }
     void KillBanner()
     {
         if(bannerTimer<=0)return;
@@ -216,7 +223,10 @@ public partial class AerialCombatPrototype
         Color cyan=new Color(.16f,.88f,1),goldColor=new Color(1,.74f,.18f),orange=new Color(1,.32f,.13f);
         Box(new Rect(20,20,245,68),new Color(.01f,.025f,.045f,.8f));
         Text(new Rect(34,24,220,36),"R I F T",title);
-        Text(new Rect(35,60,220,23),player.Altitude>550?"SUBORBITAL COAST":"ATMOSPHERIC FLIGHT",small);
+        // The coast line is also the salvage-doubling line, so the band label is where the player learns the rule.
+        GUI.color=player.Altitude>550?new Color(1,.82f,.4f):Color.white;
+        Text(new Rect(35,60,220,23),player.Altitude>550?"SUBORBITAL COAST   SALVAGE x2":"ATMOSPHERIC FLIGHT",small);
+        GUI.color=Color.white;
         MatchClock();
         BountyStrip();
 
@@ -251,6 +261,14 @@ public partial class AerialCombatPrototype
         Text(new Rect(353,Height-96,140,26),"HULL "+Mathf.CeilToInt(player.health),normal);
         Box(new Rect(355,Height-55,110,5),new Color(.25f,.14f,.1f));
         Box(new Rect(355,Height-55,110*player.health/100,5),orange);
+        // Skin temperature is an ember-red sliver pinned under the hull bar, deliberately nowhere near the cyan
+        // weapon-heat bar at the right end of the strip: a full bar here means the airframe is already burning.
+        float temp=Mathf.Clamp01(player.hullHeat);bool burning=player.hullHeat>1;
+        GUI.color=burning?new Color(1,.55f,.22f):new Color(1,1,1,.72f);
+        Text(new Rect(355,Height-68,140,20),"SKIN "+Mathf.RoundToInt(player.hullHeat*100)+"%",small);
+        GUI.color=Color.white;
+        Box(new Rect(355,Height-45,110,3),new Color(.22f,.1f,.07f));
+        Box(new Rect(355,Height-45,110*temp,3),burning?Color.Lerp(new Color(1,.45f,.12f),new Color(2.4f,1.6f,.9f),.5f+.5f*Mathf.Sin(Time.unscaledTime*9)):Color.Lerp(new Color(.8f,.34f,.1f),new Color(1.7f,.44f,.1f),temp));
         // A full hold is a flight-model penalty, so the readout has to warn before the handling does.
         bool heavy=player.cargo>=60;
         GUI.color=heavy?goldColor:Color.white;
@@ -309,8 +327,10 @@ public partial class AerialCombatPrototype
                 Vector3 lead=InterceptPoint(player,target.position,targetVelocity,360);
                 Vector2 t=Project(lead,out visible);if(visible){Ring2D(t,6,goldColor);Line(bore,t,new Color(1,.75f,.2f,.4f));}
             }
-            if(player.Speed<45 && player.Altitude<500)Text(new Rect(530,Height-170,300,28),"STALL",normal);
-            if(player.Altitude<40)Text(new Rect(530,Height-205,300,28),"PULL UP",normal);
+            int warning=0;
+            if(player.Speed<45 && player.Altitude<500)Warning(ref warning,"STALL",new Color(1,.85f,.4f));
+            if(player.Altitude<40)Warning(ref warning,"PULL UP",new Color(1,.34f,.18f));
+            if(player.hullHeat>1)Warning(ref warning,"RE-ENTRY",new Color(1,.46f,.1f));
             if(lastAttackAge>0 && lastAttackDirection.sqrMagnitude>.01f)
             {
                 Vector3 local=cam.transform.InverseTransformDirection(lastAttackDirection);

@@ -124,7 +124,31 @@ public static class RiftVerification
             Check(plainBank==40 && surgeBank==80,"Overcharged refinery banks cargo at double rate");
             surge.owner=-1;surge.claimant=-1;surge.progress=0;surge.ownerAge=0;surge.overcharge=0;p.cargo=0;
 
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+p.Altitude.ToString("F1")+" laden speed="+p.Speed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank);
+            // Re-entry heat: nose straight down at 120 m/s from the coast line has to cook the airframe inside 4 s.
+            g.Spawn(p);p.invulnerable=0;p.cargo=0;p.controls=Vector3.zero;
+            p.transform.SetPositionAndRotation(new Vector3(0,900,0),Quaternion.Euler(90,0,0));
+            p.velocity=new Vector3(0,-120,0);p.ResetRenderPose();
+            for(int i=0;i<200;i++)p.Simulate(.02f);
+            float plungeHeat=p.hullHeat,plungeHealth=p.health;
+            Check(plungeHeat>1 && plungeHealth<100,"Vertical plunge from 900 m burns through the hull");
+            // 19.5 degrees nose down at 120 m/s is 40 m/s of descent: an ordinary dogfight dive, which must cost nothing.
+            g.Spawn(p);p.invulnerable=0;p.cargo=0;p.controls=Vector3.zero;
+            p.transform.SetPositionAndRotation(new Vector3(0,300,0),Quaternion.Euler(19.47f,0,0));
+            p.velocity=p.transform.forward*120;p.ResetRenderPose();
+            for(int i=0;i<150;i++)p.Simulate(.02f);
+            Check(p.health>=100 && p.hullHeat<1,"A combat dive never cooks the airframe");
+
+            // Salvage prised loose above the coast line is worth double, judged on the collector's altitude.
+            g.Spawn(p);p.invulnerable=0;p.cargo=0;
+            p.transform.position=new Vector3(0,700,0);
+            g.SpawnShard(p.transform.position,10);g.Collect(p,g.shards[g.shards.Count-1]);
+            int suborbital=p.cargo;p.cargo=0;
+            p.transform.position=new Vector3(0,300,0);
+            g.SpawnShard(p.transform.position,10);g.Collect(p,g.shards[g.shards.Count-1]);
+            Check(suborbital==20 && p.cargo==10,"Suborbital salvage is worth double on pickup");
+            p.cargo=0;
+
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+p.Altitude.ToString("F1")+" laden speed="+p.Speed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
         }
         finally
         {
