@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum MatchPhase { Countdown, Playing, Ended }
@@ -5,8 +6,11 @@ public enum MatchPhase { Countdown, Playing, Ended }
 public partial class AerialCombatPrototype
 {
     public const float CountdownLength=3, MatchLength=300;
+    // A surge every 75 s lasting 30 s: long enough to cross a continent of sky, short enough that nobody camps it.
+    public const float OverchargeInterval=75, OverchargeLength=30, OverchargeReach=1500;
     public MatchPhase phase=MatchPhase.Countdown;
-    public float phaseTimer;
+    public float phaseTimer, overchargeTimer;
+    readonly List<CaptureGate> surgeCandidates=new List<CaptureGate>();
     // Scoring verbs only resolve while Playing: Countdown gives the player a beat to read the horizon, Ended freezes the board for the panel.
     public bool MatchActive => phase==MatchPhase.Playing;
     public float MatchRemaining => phase==MatchPhase.Playing?Mathf.Max(0,MatchLength-phaseTimer):(phase==MatchPhase.Countdown?MatchLength:0);
@@ -29,8 +33,39 @@ public partial class AerialCombatPrototype
                 heartbeatMark=mark;
                 if(audioSource)audioSource.PlayOneShot(hitSound,MatchRemaining<=10?.5f:.26f);
             }
+            overchargeTimer+=dt;
+            if(overchargeTimer>=OverchargeInterval){overchargeTimer-=OverchargeInterval;TriggerOvercharge();}
             if(phaseTimer>=MatchLength){phase=MatchPhase.Ended;phaseTimer=0;Banner("MATCH COMPLETE");}
         }
+    }
+
+    public CaptureGate OverchargedGate()
+    {
+        foreach(var gate in gates) if(gate.overcharge>0) return gate;
+        return null;
+    }
+
+    // Picks the refinery the surge should land on, or none. Returns whether one was lit so the harness can assert the exclusion.
+    public bool TriggerOvercharge()
+    {
+        int leader=-1,best=int.MinValue;
+        foreach(var p in pilots) if(p.score>best){best=p.score;leader=p.id;}
+        surgeCandidates.Clear();
+        foreach(var gate in gates)
+        {
+            // Never reward the pilot already ahead, and never light a ring nobody can reach inside the 30 s window.
+            if(gate.overcharge>0 || (gate.owner>=0 && gate.owner==leader)) continue;
+            float nearest=float.MaxValue;
+            foreach(var p in pilots) if(p.Alive) nearest=Mathf.Min(nearest,Vector3.Distance(p.transform.position,gate.transform.position));
+            if(nearest>OverchargeReach) continue;
+            surgeCandidates.Add(gate);
+        }
+        if(surgeCandidates.Count==0) return false;
+        var pick=surgeCandidates[Random.Range(0,surgeCandidates.Count)];
+        pick.overcharge=OverchargeLength;
+        Banner("OVERCHARGE   REFINERY "+(pick.index+1));
+        Feedback("large",pick.transform.position);
+        return true;
     }
 
     public void RestartMatch()
@@ -41,12 +76,12 @@ public partial class AerialCombatPrototype
             p.shotsFired=0;p.combatShotsFired=0;p.hitsLanded=0;
             Spawn(p,true);
         }
-        foreach(var gate in gates){gate.owner=-1;gate.claimant=-1;gate.progress=0;gate.ownerAge=0;gate.payoutFlash=0;}
+        foreach(var gate in gates){gate.owner=-1;gate.claimant=-1;gate.progress=0;gate.ownerAge=0;gate.payoutFlash=0;gate.overcharge=0;}
         // Loose salvage and broken wrecks are board state too: a restart that left them lying around would hand the first lap away.
         for(int i=shards.Count-1;i>=0;i--) if(shards[i]) Destroy(shards[i].gameObject);
         shards.Clear();
         foreach(var core in cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}
         elapsed=0;bannerTimer=0;damageFlash=0;lastAttackAge=0;shake=0;aceId=-1;bountyFresh=0;
-        phase=MatchPhase.Countdown;phaseTimer=0;heartbeatMark=-1;
+        phase=MatchPhase.Countdown;phaseTimer=0;overchargeTimer=0;heartbeatMark=-1;
     }
 }

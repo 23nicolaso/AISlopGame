@@ -192,6 +192,8 @@ public class CaptureGate : MonoBehaviour
 {
     public int index, owner=-1, claimant=-1;
     public float progress;
+    // Seconds left on a double-rate refining surge. The match clock owns the trigger; the gate only counts it down.
+    public float overcharge;
     public const float Radius=105;
     public LineRenderer ring, progressRing;
     public Renderer core;
@@ -219,7 +221,12 @@ public class CaptureGate : MonoBehaviour
                     owner=occupant.id; ownerAge=0; occupant.score+=25;
                 }
                 // The ace refines at a premium: the mark is worth holding onto, which is what makes hunting it worth the risk.
-                if(occupant.cargo>0){occupant.score+=g.aceId==occupant.id?Mathf.RoundToInt(occupant.cargo*1.5f):occupant.cargo;occupant.cargo=0;}
+                // An overcharged refinery doubles on top of that, which is what drags the whole field onto one point.
+                if(occupant.cargo>0)
+                {
+                    float rate=(g.aceId==occupant.id?1.5f:1)*(overcharge>0?2:1);
+                    occupant.score+=Mathf.RoundToInt(occupant.cargo*rate);occupant.cargo=0;
+                }
                 occupant.health=Mathf.Min(100,occupant.health+dt*10);
             }
         }
@@ -232,8 +239,11 @@ public class CaptureGate : MonoBehaviour
         }
         else ownerAge=0;
         payoutFlash=Mathf.Max(0,payoutFlash-dt);
+        overcharge=Mathf.Max(0,overcharge-dt);
         // Two or more competing pilots contest the zone: progress and banking stop.
         Color color=count>1?new Color(1,.18f,.08f):owner==0?new Color(.1f,1,.8f):owner<0?new Color(.1f,.7f,1):new Color(1,.35f,.13f);
+        // Violet washes over whoever holds it rather than replacing the ownership read: the ring still says who and now also says how much.
+        if(overcharge>0)color=Color.Lerp(color,new Color(1.1f,.28f,2.1f),.5f+.22f*Mathf.Sin(g.elapsed*6));
         if(payoutFlash>0)color=Color.Lerp(color,new Color(2.4f,2.4f,2.2f),payoutFlash/.4f);
         if(colors==null)colors=new MaterialPropertyBlock();
         colors.SetColor("_BaseColor",color);

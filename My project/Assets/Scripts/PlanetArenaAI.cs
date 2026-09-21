@@ -103,7 +103,9 @@ public partial class ArenaPilot
             bool hurt=health<34;
             if(hurt)repairing=true;
             if(health>=85)repairing=false;
-            gateTarget=(cargo>=Profile.bankAt || repairing)?arena.NearestGate(transform.position):null;
+            // A doubling refinery overrides the personality's patience: even a hoarder will cash 15 units at 2x rather than wait.
+            var surge=arena.OverchargedGate();
+            gateTarget=surge && cargo>=15?surge:(cargo>=Profile.bankAt || repairing)?arena.NearestGate(transform.position):null;
             if(gateTarget && cargo==0 && health>=85)gateTarget=null;
             // Retaliation also waits out the reaction delay, otherwise a blind-side hit would be answered instantly.
             bool retaliate=!repairing && retaliation>0 && alertTimer<=0 && CanEngage(aggressor,900);

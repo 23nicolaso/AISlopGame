@@ -94,7 +94,37 @@ public static class RiftVerification
             p.transform.position=launch;p.transform.rotation=heading;p.velocity=motion;p.cargo=150;
             for(int i=0;i<250;i++)p.Simulate(.02f);
             Check(p.Altitude<lightAltitude-5 && p.Speed<lightSpeed-1,"Full cargo hold flies heavier and slower");
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+p.Altitude.ToString("F1")+" laden speed="+p.Speed.ToString("F1"));
+
+            // Overcharge: the surge must land on exactly one reachable ring, and must skip the cycle entirely when
+            // every ring is more than 1.5 km from the whole field, because 30 s does not buy a trip around the planet.
+            foreach(var pilot in g.pilots){pilot.score=0;pilot.cargo=0;}
+            foreach(var ring in g.gates){ring.overcharge=0;ring.owner=-1;ring.claimant=-1;ring.progress=0;ring.ownerAge=0;}
+            // Sitting the whole field inside refinery 4 leaves it the only ring within 1.5 km: its nearest neighbour is 1609 m away.
+            var reachable=g.gates[3];g.aceId=-1;
+            foreach(var pilot in g.pilots)pilot.transform.position=reachable.transform.position;
+            g.overchargeTimer=0;g.MatchTick(AerialCombatPrototype.OverchargeInterval+.1f);
+            int lit=0;foreach(var ring in g.gates)if(ring.overcharge>0)lit++;
+            Check(lit==1 && reachable.overcharge>0,"Overcharge lights exactly one refinery, and only one within reach");
+            reachable.overcharge=0;
+            // Park the field high above the planet: now every ring is thousands of metres from anybody.
+            foreach(var pilot in g.pilots)pilot.transform.position=AerialCombatPrototype.PlanetCenter+Vector3.up*6000;
+            Check(!g.TriggerOvercharge(),"Overcharge skips a cycle when no refinery is reachable");
+            foreach(var ring in g.gates)Check(ring.overcharge<=0,"Unreachable cycle leaves every refinery cold");
+
+            // Same 40 units, same ring, twice: the surge is worth exactly double.
+            var surge=g.gates[2];
+            foreach(var other in g.pilots)if(other!=p)other.transform.position=surge.transform.position+Vector3.right*4000;
+            p.transform.position=surge.transform.position;
+            surge.owner=-1;surge.claimant=-1;surge.progress=0;surge.ownerAge=0;surge.overcharge=0;
+            p.score=0;p.cargo=40;surge.Tick(1.5f);
+            int plainBank=p.score-25;
+            surge.owner=-1;surge.claimant=-1;surge.progress=0;surge.ownerAge=0;surge.overcharge=AerialCombatPrototype.OverchargeLength;
+            p.score=0;p.cargo=40;surge.Tick(1.5f);
+            int surgeBank=p.score-25;
+            Check(plainBank==40 && surgeBank==80,"Overcharged refinery banks cargo at double rate");
+            surge.owner=-1;surge.claimant=-1;surge.progress=0;surge.ownerAge=0;surge.overcharge=0;p.cargo=0;
+
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+p.Altitude.ToString("F1")+" laden speed="+p.Speed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank);
         }
         finally
         {

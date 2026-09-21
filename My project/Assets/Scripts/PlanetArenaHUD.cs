@@ -166,18 +166,44 @@ public partial class AerialCombatPrototype
         Vector3 v=cam.WorldToViewportPoint(p);visible=v.z>0 && v.x>0 && v.x<1 && v.y>0 && v.y<1;
         return new Vector2(v.x*Width,(1-v.y)*Height);
     }
+    // Screen position for a world point, pinned to a ring around the reticle when it falls outside the frame.
+    Vector2 MarkerPoint(Vector3 location)
+    {
+        bool visible;Vector2 p=Project(location,out visible);
+        if(visible)return p;
+        Vector3 relative=cam.transform.InverseTransformPoint(location);
+        Vector2 dir=new Vector2(relative.x,-relative.y);
+        if(dir.sqrMagnitude<.01f)dir=Vector2.right;
+        p=new Vector2(Width*.5f,Height*.5f)+dir.normalized*280;
+        p.x=Mathf.Clamp(p.x,35,Width-280);p.y=Mathf.Clamp(p.y,100,Height-130);
+        return p;
+    }
+    // The surge marker deliberately ignores both range and the horizon test every other marker respects: a 30 s
+    // window is worthless if the ring only appears once you already happen to be looking at the right continent.
+    void SurgeMarker(CaptureGate gate)
+    {
+        Vector2 p=MarkerPoint(gate.transform.position);
+        float pulse=.5f+.5f*Mathf.Sin(Time.unscaledTime*5.5f);
+        Color violetHud=new Color(.76f,.36f,1,.55f+pulse*.45f);
+        Ring2D(p,13+pulse*4,violetHud);
+        Ring2D(p,7,new Color(.9f,.66f,1,.7f+pulse*.3f));
+        // Four closing chevrons: the same read as a countdown clamp tightening on the ring.
+        for(int i=0;i<4;i++)
+        {
+            float a=Time.unscaledTime*1.3f+i*Mathf.PI*.5f;
+            Vector2 d=new Vector2(Mathf.Cos(a),Mathf.Sin(a));
+            Line(p+d*(21+pulse*3),p+d*(28+pulse*3),violetHud,2);
+        }
+        float x=Mathf.Min(p.x+30,Width-196);
+        GUI.color=new Color(.87f,.63f,1,.75f+pulse*.25f);
+        Text(new Rect(x,p.y-19,190,18),"OVERCHARGE  x2",small);
+        Text(new Rect(x,p.y-1,190,18),Mathf.CeilToInt(gate.overcharge)+"s   "+Mathf.RoundToInt(Vector3.Distance(player.transform.position,gate.transform.position))+" m",small);
+        GUI.color=Color.white;
+    }
     void NavMarker(Vector3 location,Color c,bool circle)
     {
         if(!VisibleBetween(player.transform.position,location))return;
-        bool visible;Vector2 p=Project(location,out visible);
-        if(!visible)
-        {
-            Vector3 relative=cam.transform.InverseTransformPoint(location);
-            Vector2 dir=new Vector2(relative.x,-relative.y);
-            if(dir.sqrMagnitude<.01f)dir=Vector2.right;
-            p=new Vector2(Width*.5f,Height*.5f)+dir.normalized*280;
-            p.x=Mathf.Clamp(p.x,35,Width-280);p.y=Mathf.Clamp(p.y,100,Height-130);
-        }
+        Vector2 p=MarkerPoint(location);
         if(circle)Ring2D(p,10,c);
         else {Line(p+Vector2.up*8,p+Vector2.right*8,c);Line(p+Vector2.right*8,p+Vector2.down*8,c);Line(p+Vector2.down*8,p+Vector2.left*8,c);Line(p+Vector2.left*8,p+Vector2.up*8,c);}
         if(Vector3.Distance(player.transform.position,location)>150)
@@ -256,6 +282,7 @@ public partial class AerialCombatPrototype
         Box(new Rect(radar.x-2,radar.y-2,4,4),cyan);
         var gate=NearestGate(player.transform.position);if(gate)NavMarker(gate.transform.position,cyan,true);
         var core=NearestCore(player.transform.position);if(core)NavMarker(core.transform.position,goldColor,false);
+        var surge=OverchargedGate();if(surge)SurgeMarker(surge);
         foreach(var p in pilots)
         {
             if(p==player || !p.Alive || Vector3.Distance(p.transform.position,player.transform.position)>800 || !VisibleBetween(player.transform.position,p.transform.position))continue;
