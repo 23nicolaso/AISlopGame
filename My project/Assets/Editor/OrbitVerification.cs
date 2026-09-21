@@ -143,7 +143,20 @@ public static class OrbitVerification
             // 22. Start gate: a waiting restart holds the world until started.
             g.Restart(9,true); Check(!g.started,"a waiting restart is not started"); float e0=g.elapsed; g.Advance(Dt); Check(Mathf.Approximately(g.elapsed,e0),"the world holds before the first key"); g.started=true; g.Advance(Dt); Check(g.elapsed>e0,"the world runs once started");
 
-            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism, skill offer and pick, magnet, armour, whip, brake, phase, compound, wordless HUD, Kessler clock, wreckage persistence, start gate";
+            // 23. Audio is synthesised: five shell loops of exactly eight bars at their tempo, a tension loop, nine effects, and
+            // consecutive catches step the catch note up the pentatonic scale.
+            for(int i=0;i<5;i++){ var lp=g.LoopClip(i); float bpm=100+Mathf.Min(i,3)*6; int expect=(int)(60f/bpm*22050)*4*8; Check(lp&&lp.samples==expect,"loop "+i+" is eight bars at "+bpm+" bpm ("+(lp?lp.samples:0)+" vs "+expect+")"); }
+            Check(g.TensionClip&&g.FxCount==9,"tension loop and nine effects exist");
+            g.Restart(1); g.Ping(1); float p1=g.CatchPitch; g.Ping(1); float p2=g.CatchPitch; g.Ping(1); float p3=g.CatchPitch;
+            Check(Mathf.Approximately(p1,1)&&Mathf.Abs(p2-Mathf.Pow(2,3/12f))<1e-3f&&Mathf.Abs(p3-Mathf.Pow(2,5/12f))<1e-3f,"catch chain steps the pitch up the scale ("+p1.ToString("F3")+", "+p2.ToString("F3")+", "+p3.ToString("F3")+")");
+
+            // 24. Best score: a run that beats the stored best records it and flags the HUD; a lower one does not.
+            int savedBest=PlayerPrefs.GetInt("orbit.best",0); PlayerPrefs.SetInt("orbit.best",50); g.best=50;
+            g.Restart(1); g.score=120; g.End(false,"test"); Check(g.best==120&&g.newBest&&PlayerPrefs.GetInt("orbit.best")==120,"a higher score becomes the best");
+            g.Restart(1); g.score=30; g.End(false,"test"); Check(g.best==120&&!g.newBest,"a lower score leaves the best alone");
+            PlayerPrefs.SetInt("orbit.best",savedBest); g.best=savedBest;
+
+            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism, skill offer and pick, magnet, armour, whip, brake, phase, compound, wordless HUD, Kessler clock, wreckage persistence, start gate, synthesised music and catch chain, best score";
         }
         finally { OrbitSnake.Persist=false; g.Restart(7); OrbitSnake.Persist=wasPersist; if(string.IsNullOrEmpty(savedWreck))PlayerPrefs.DeleteKey(OrbitSnake.WreckKey); else PlayerPrefs.SetString(OrbitSnake.WreckKey,savedWreck); g.paused=wasPaused; }
     }

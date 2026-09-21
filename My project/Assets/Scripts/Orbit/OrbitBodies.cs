@@ -70,7 +70,7 @@ public class OrbitShip : MonoBehaviour
             {
                 int lost=segments.Count-i;
                 for(int j=segments.Count-1;j>=i;j--){ var n=TrailNormal((j+1)*OrbitSnake.SegmentSpacing,out var d); OrbitSnake.I.SpawnJunkAt(OrbitSnake.I.level,n,d,OrbitSnake.Speed*.7f,true); RemoveLast(); }
-                OrbitSnake.I.Toast("SEVERED — "+lost+" segments cut loose on this shell"); OrbitSnake.I.Ping(0); shake=1; return;
+                OrbitSnake.I.Toast("SEVERED — "+lost+" segments cut loose on this shell"); OrbitSnake.I.Ping(4); OrbitSnake.I.Slow(.15f,.15f); shake=1; return;
             }
     }
 }

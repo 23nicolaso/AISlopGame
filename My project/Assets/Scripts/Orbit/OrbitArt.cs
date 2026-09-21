@@ -37,12 +37,10 @@ public partial class OrbitSnake
             for(int k=0;k<128;k++){ float a=k*Mathf.PI*2/128; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } }
         // Atmosphere limb: RIFT's shader, re-centred on the origin. Cull Front, so it is seen from inside as a halo on the disc.
         var atmoShader=Shader.Find("Rift/Atmosphere");
-        if(atmoShader){ var atmo=new Material(atmoShader); owned.Add(atmo); atmo.SetVector("_PlanetCenter",Vector3.zero); atmo.SetFloat("_Radius",PlanetRadius); Shape("Atmosphere",world,PrimitiveType.Sphere,Vector3.zero,Vector3.one*(PlanetRadius+25)*2,atmo); }
-        // Star field with a nebula wash: 700 additive specks plus four huge faint blobs far behind everything.
+        if(atmoShader){ var atmo=new Material(atmoShader); owned.Add(atmo); atmo.SetVector("_PlanetCenter",Vector3.zero); atmo.SetFloat("_Radius",PlanetRadius); Shape("Atmosphere",world,PrimitiveType.Sphere,Vector3.zero,Vector3.one*(PlanetRadius+12)*2,atmo); }
+        // Star field: 700 additive specks on a far sphere. (Nebula blobs were tried and read as dark discs from this camera.)
         var stars=new GameObject("Stars"); stars.transform.SetParent(world,false); var sr=new System.Random(3);
         for(int i=0;i<700;i++){ float z=(float)sr.NextDouble()*2-1,a=(float)sr.NextDouble()*Mathf.PI*2,r=Mathf.Sqrt(1-z*z); Shape("Star",stars.transform,PrimitiveType.Cube,new Vector3(r*Mathf.Cos(a),z,r*Mathf.Sin(a))*1500,Vector3.one*(1.5f+(float)sr.NextDouble()*3.5f),starMat); }
-        Color[] neb={new Color(.35f,.15f,.5f),new Color(.1f,.3f,.55f),new Color(.5f,.2f,.3f),new Color(.15f,.4f,.45f)};
-        for(int i=0;i<4;i++){ float z=(float)sr.NextDouble()*2-1,a=(float)sr.NextDouble()*Mathf.PI*2,r=Mathf.Sqrt(1-z*z); Shape("Nebula",stars.transform,PrimitiveType.Sphere,new Vector3(r*Mathf.Cos(a),z,r*Mathf.Sin(a))*1400,Vector3.one*(500+(float)sr.NextDouble()*400),Additive(neb[i],.16f)); }
         var sun=new GameObject("Sun").AddComponent<Light>(); sun.transform.SetParent(world); sun.type=LightType.Directional; sun.intensity=2.6f; sun.color=new Color(1,.95f,.86f); sun.transform.rotation=Quaternion.LookRotation(-sunDir);
         RenderSettings.ambientMode=AmbientMode.Trilight; RenderSettings.ambientSkyColor=new Color(.3f,.36f,.5f); RenderSettings.ambientEquatorColor=new Color(.2f,.24f,.34f); RenderSettings.ambientGroundColor=new Color(.12f,.14f,.2f); RenderSettings.skybox=null; RenderSettings.fog=false;
         // Post-processing: a runtime global volume with bloom for the HDR emissives and a soft vignette.
@@ -141,7 +139,7 @@ public partial class OrbitSnake
     void BuildCamera()
     {
         cam=new GameObject("Orbit camera").AddComponent<Camera>(); cam.transform.SetParent(world); cam.tag="MainCamera";
-        cam.clearFlags=CameraClearFlags.SolidColor; cam.backgroundColor=new Color(.008f,.01f,.025f); cam.fieldOfView=62; cam.nearClipPlane=1; cam.farClipPlane=2600; cam.allowHDR=true;
+        cam.clearFlags=CameraClearFlags.SolidColor; cam.backgroundColor=new Color(.008f,.01f,.025f); cam.fieldOfView=62; cam.nearClipPlane=1; cam.farClipPlane=3200; cam.allowHDR=true;
         camData=cam.GetUniversalAdditionalCameraData(); camData.renderPostProcessing=true; camData.antialiasing=AntialiasingMode.SubpixelMorphologicalAntiAliasing;
         cam.gameObject.AddComponent<AudioListener>();
     }
@@ -151,7 +149,8 @@ public partial class OrbitSnake
     // not the world. Height grows with the shell so the planet visibly shrinks as you climb.
     const float CamHeight=85f;
     float CamHeightNow => CamHeight+level*10;
-    public void SnapCamera(){ camUp=ship.tangent; ApplyCamera(); }
+    // Snap is only used after a restart or a staged jump, so it also clears the exhaust trails a teleport would smear.
+    public void SnapCamera(){ camUp=ship.tangent; ApplyCamera(); foreach(var t in ship.GetComponentsInChildren<TrailRenderer>())t.Clear(); }
     void UpdateCamera(float dt){ ApplyCamera(); TintJunk(); }
     void ApplyCamera()
     {

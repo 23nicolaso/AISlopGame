@@ -49,6 +49,9 @@ public partial class OrbitSnake : MonoBehaviour
     public Transform world; public Camera cam;
     public string toast=""; public float toastTimer; public readonly List<string> feed=new();
     public float ejectPulse, strikePulse, catchPulse, armourPulse, pickPulse, endTimer; public int lastEjected;
+    // Best score across runs, and the hit-stop clock: Slow() dips Time.timeScale for a few real milliseconds on a contact.
+    public int best; public bool newBest; float slowUntil=-1, slowScale=1;
+    public void Slow(float scale,float seconds){ slowScale=scale; slowUntil=Time.unscaledTime+seconds; }
     System.Random rng;
     // Built player: -orbit-screenshot=<png> captures the full frame with the IMGUI HUD 3 s in (Camera.Render in the
     // Editor cannot see OnGUI), on a scripted weave with a starter train, then quits.
@@ -73,6 +76,7 @@ public partial class OrbitSnake : MonoBehaviour
         if(I&&I!=this){Destroy(gameObject);return;}
         I=this; Application.runInBackground=true;
         foreach(var arg in System.Environment.GetCommandLineArgs())if(arg.StartsWith("-orbit-screenshot="))screenshotPath=arg.Substring(18);
+        best=PlayerPrefs.GetInt("orbit.best",0);
         foreach(var c in FindObjectsByType<Camera>())c.enabled=false;
         foreach(var l in FindObjectsByType<Light>())l.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>())a.enabled=false;
@@ -84,7 +88,7 @@ public partial class OrbitSnake : MonoBehaviour
     // `wait` holds the world until the first key: the start screen is the frozen shell with the enter glyph over it.
     public void Restart(int seed,bool wait=false)
     {
-        rng=new System.Random(seed); started=!wait; shellTime=0; lastKessler=0; kesslerSpawned=0; kesslerPulse=0;
+        rng=new System.Random(seed); started=!wait; shellTime=0; lastKessler=0; kesslerSpawned=0; kesslerPulse=0; newBest=false; slowUntil=-1; Time.timeScale=1; catchChain=0; catchChainTimer=0;
         // Immediate, not deferred: the checks and the screenshot runner restart several times inside one frame.
         foreach(var j in junk)DestroyImmediate(j.gameObject); junk.Clear();
         foreach(var f in falling)DestroyImmediate(f.gameObject); falling.Clear();
@@ -163,7 +167,7 @@ public partial class OrbitSnake : MonoBehaviour
     }
     public void Take(SkillPod pod)
     {
-        skills[(int)pod.skill]=true; if(pod.skill==Skill.Armour)armour=1; pickPulse=.8f; score+=25; Chime(4);
+        skills[(int)pod.skill]=true; if(pod.skill==Skill.Armour)armour=1; pickPulse=.8f; score+=25; Ping(6); Slow(.2f,.2f);
         foreach(var p in skillPods)Kill(p.gameObject); skillPods.Clear(); Toast("SKILL "+pod.skill);
     }
 
@@ -210,7 +214,7 @@ public partial class OrbitSnake : MonoBehaviour
     void Catch(OrbitJunk j)
     {
         caught++; score+=10+5*level; catchPulse=.4f;
-        if(ship.segments.Count<MaxSegments)ship.AddSegment(); Kill(j.gameObject); Ping(1); ship.tailFlash=.3f; Burst(j.Position,new Color(.5f,1.4f,.7f),18);
+        if(ship.segments.Count<MaxSegments)ship.AddSegment(); Kill(j.gameObject); Ping(1); ship.tailFlash=.3f; Burst(j.Position,new Color(.5f,1.4f,.7f),18); Slow(.3f,.05f);
     }
 
     // A strike costs the two hindmost segments; armour eats one strike outright; with nothing left to shed the hull goes.
@@ -218,14 +222,15 @@ public partial class OrbitSnake : MonoBehaviour
     {
         Kill(j.gameObject); strikes++;
         if(armour>0){ armour=0; armourPulse=.7f; ship.grace=StrikeGrace; Ping(2); return; }
-        strikePulse=.6f; ship.shake=1; StrikeRing(); Burst(j.Position,new Color(1.5f,.35f,.2f),28);
+        strikePulse=.6f; ship.shake=1; StrikeRing(); Burst(j.Position,new Color(1.5f,.35f,.2f),28); Slow(.1f,.12f);
         if(ship.segments.Count==0){ End(false,"Struck by "+(j.wreck?"your own wreckage":"debris")+" with nothing left to shed"); return; }
         ship.Shed(2); ship.grace=StrikeGrace; Toast("STRIKE — two segments lost"); Ping(0);
     }
 
     public void End(bool win,string why)
     {
-        if(ended)return; ended=true; won=win; endReason=why; ship.dead=!win; endTimer=0; Toast(why); Ping(win?3:0);
+        if(ended)return; ended=true; won=win; endReason=why; ship.dead=!win; endTimer=0; Toast(why); Ping(win?3:8);
+        if(score>best){ best=score; newBest=true; PlayerPrefs.SetInt("orbit.best",best); PlayerPrefs.Save(); }
         if(!win){ if(Persist)SaveWreckage(); BreakUp(); }
         else if(Persist){ PlayerPrefs.DeleteKey(WreckKey); PlayerPrefs.Save(); }
     }
@@ -237,7 +242,7 @@ public partial class OrbitSnake : MonoBehaviour
         if(!EjectReady)return false;
         int n=ship.segments.Count; lastEjected=n;
         for(int i=0;i<n;i++){ var f=new GameObject("Falling segment").AddComponent<OrbitFalling>(); f.transform.SetParent(world); f.Init(ship.segments[i].position,i*.06f); BuildFallingArt(f); falling.Add(f); }
-        ship.Shed(n); score+=EjectValue(n); ejectPulse=1.2f;
+        ship.Shed(n); score+=EjectValue(n); ejectPulse=1.2f; Slow(.3f,.45f); Ping(5);
         level++; shellTime=0; lastKessler=0; kesslerSpawned=0; ship.Lift(ShellRadius(level)); if(junk.FindAll(x=>x.shell==level&&!x.shot&&!x.wreck).Count==0)SeedShell(level);
         Toast("EJECTED "+n+" — burning up below. Climbing to "+ShellNames[level]); Chime(level);
         if(level>=ShellAltitude.Length-1)End(true,"ESCAPE — you cleared the field. Score "+score); else OfferSkills();
@@ -247,32 +252,36 @@ public partial class OrbitSnake : MonoBehaviour
     float lastTapA=-1,lastTapD=-1;
     void Update()
     {
+        Time.timeScale=Time.unscaledTime<slowUntil&&!paused?slowScale:1; TickAudio(Time.unscaledDeltaTime);
         if(screenshotPath!=null)
         {
-            started=true;
+            started=true; slowUntil=-1;
             if(ship.segments.Count==0&&elapsed<.1f){ for(int i=0;i<5;i++)ship.AddSegment(); skills[(int)Skill.Magnet]=true; skills[(int)Skill.Armour]=true; armour=1; OfferSkills(); }
             ship.turn=Mathf.Sin(elapsed*1.5f);
             if(!shotTaken&&elapsed>3){ ScreenCapture.CaptureScreenshot(screenshotPath); shotTaken=true; Debug.Log("[SHOT] HUD capture -> "+screenshotPath); }
             if(shotTaken&&elapsed>4.5f)Application.Quit();
             return;
         }
-        var k=Keyboard.current; if(k==null)return;
-        if(!started){ if(k.anyKey.wasPressedThisFrame&&!k.escapeKey.wasPressedThisFrame)started=true; return; }
-        if(k.escapeKey.wasPressedThisFrame&&!ended)paused=!paused;
-        if(ended&&k.enterKey.wasPressedThisFrame)Restart((int)(Time.realtimeSinceStartup*1000)&0xffff,true);
+        var k=Keyboard.current; var gp=Gamepad.current; if(k==null&&gp==null)return;
+        bool Key(System.Func<Keyboard,bool> f) => k!=null&&f(k); bool Pad(System.Func<Gamepad,bool> f) => gp!=null&&f(gp);
+        if(!started){ if((Key(x=>x.anyKey.wasPressedThisFrame&&!x.escapeKey.wasPressedThisFrame))||Pad(x=>x.buttonSouth.wasPressedThisFrame||x.startButton.wasPressedThisFrame)){ started=true; Ping(7); } return; }
+        if((Key(x=>x.escapeKey.wasPressedThisFrame)||Pad(x=>x.startButton.wasPressedThisFrame))&&!ended)paused=!paused;
+        if(ended&&endTimer>.6f&&(Key(x=>x.enterKey.wasPressedThisFrame||x.spaceKey.wasPressedThisFrame)||Pad(x=>x.buttonSouth.wasPressedThisFrame||x.startButton.wasPressedThisFrame)))Restart((int)(Time.realtimeSinceStartup*1000)&0xffff,true);
         if(paused||ended){ship.turn=0;ship.brake=false;return;}
-        float turn=(k.dKey.isPressed||k.rightArrowKey.isPressed?1:0)-(k.aKey.isPressed||k.leftArrowKey.isPressed?1:0);
+        float turn=Key(x=>x.dKey.isPressed||x.rightArrowKey.isPressed)?1:0; turn-=Key(x=>x.aKey.isPressed||x.leftArrowKey.isPressed)?1:0;
+        if(gp!=null){ float sx=gp.leftStick.ReadValue().x; if(Mathf.Abs(sx)>.15f)turn+=sx; }
         var m=Mouse.current; if(m!=null&&Cursor.lockState==CursorLockMode.Locked)turn+=m.delta.ReadValue().x*.02f;
         ship.turn=Mathf.Clamp(turn,-1,1);
-        ship.brake=Has(Skill.Brake)&&(k.sKey.isPressed||k.downArrowKey.isPressed);
+        ship.brake=Has(Skill.Brake)&&(Key(x=>x.sKey.isPressed||x.downArrowKey.isPressed)||Pad(x=>x.leftTrigger.isPressed));
         if(Has(Skill.Phase))
         {
             float now=Time.unscaledTime;
-            if(k.aKey.wasPressedThisFrame||k.leftArrowKey.wasPressedThisFrame){ if(now-lastTapA<.3f)ship.Dash(-1); lastTapA=now; }
-            if(k.dKey.wasPressedThisFrame||k.rightArrowKey.wasPressedThisFrame){ if(now-lastTapD<.3f)ship.Dash(1); lastTapD=now; }
+            if(Key(x=>x.aKey.wasPressedThisFrame||x.leftArrowKey.wasPressedThisFrame)){ if(now-lastTapA<.3f)ship.Dash(-1); lastTapA=now; }
+            if(Key(x=>x.dKey.wasPressedThisFrame||x.rightArrowKey.wasPressedThisFrame)){ if(now-lastTapD<.3f)ship.Dash(1); lastTapD=now; }
+            if(Pad(x=>x.leftShoulder.wasPressedThisFrame))ship.Dash(-1); if(Pad(x=>x.rightShoulder.wasPressedThisFrame))ship.Dash(1);
         }
-        if(Has(Skill.Whip)&&k.qKey.wasPressedThisFrame)Whip();
-        if(k.spaceKey.wasPressedThisFrame)Eject();
+        if(Has(Skill.Whip)&&(Key(x=>x.qKey.wasPressedThisFrame)||Pad(x=>x.buttonWest.wasPressedThisFrame)))Whip();
+        if(Key(x=>x.spaceKey.wasPressedThisFrame)||Pad(x=>x.buttonSouth.wasPressedThisFrame))Eject();
     }
 
     // Q: the last segment leaves the head forward as a bullet on its own great circle.

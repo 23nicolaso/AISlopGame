@@ -2,7 +2,7 @@
 
 ## Status
 
-Supersedes the free-flight Kepler draft committed as `9304457` (`OrbitSnake.cs` / `OrbitBodies.cs`). That code does not compile — it references art/audio partial members that were never written — and is being rewritten from scratch against this document. Nothing below reuses the old orbital-mechanics math; it reuses the *shape* of a few techniques (trail-buffer segment placement, dt-parameterized `Step()` for deterministic verification) that worked regardless of what state they were driving.
+**Implemented (2026-09-21).** Everything below the pitch is in `My project/Assets/Scripts/Orbit/` and verified by the 24 checks in `Assets/Editor/OrbitVerification.cs` (`-executeMethod OrbitHeadlessRunner.Run`). Shipped beyond this document: six fly-through skills (magnet, armour, whip, brake, phase, compound), a wordless HUD with a source-level check that it draws one integer label, a Kessler clock (junk every 6 s after 20 s on a shell, capped at 2x), wreckage persisting across runs in PlayerPrefs, a start gate, hit-stop, gamepad input, a best score, and a full art and audio pass with every asset (planet, clouds, atmosphere, stars, ships, junk, particles, five music loops, nine effects) synthesised at start-up. Not built: a WebGL share build; rival snakes. The old Kepler draft (`9304457`) is gone.
 
 ## Pitch
 

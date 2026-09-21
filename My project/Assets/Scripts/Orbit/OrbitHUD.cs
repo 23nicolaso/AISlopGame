@@ -6,9 +6,9 @@ using UnityEngine;
 // one label, so a word cannot creep back in without a check failing.
 public partial class OrbitSnake
 {
-    const float Width=1280,Height=720; GUIStyle digits;
+    const float Width=1280,Height=720; GUIStyle digits,small;
     static readonly Color Ink=new Color(1,1,1,.9f), Dim=new Color(1,1,1,.18f), Lit=new Color(.55f,.85f,1), Ready=new Color(.4f,1,.6f);
-    void Styles(){ if(digits!=null)return; digits=new GUIStyle(GUI.skin.label){fontSize=44,fontStyle=FontStyle.Bold,alignment=TextAnchor.UpperRight}; digits.normal.textColor=Ink; }
+    void Styles(){ if(digits!=null)return; digits=new GUIStyle(GUI.skin.label){fontSize=44,fontStyle=FontStyle.Bold,alignment=TextAnchor.UpperRight}; digits.normal.textColor=Ink; small=new GUIStyle(digits){fontSize=20}; small.normal.textColor=new Color(1,1,1,.45f); }
     static void Box(Rect r,Color c){ var old=GUI.color; GUI.color=c; GUI.DrawTexture(r,Texture2D.whiteTexture); GUI.color=old; }
     // A rotated bar: centre, length along the angle, thickness across it.
     static void Bar(Vector2 c,float len,float thick,float deg,Color col){ var old=GUI.matrix; GUI.matrix=old*Matrix4x4.TRS(new Vector3(c.x,c.y,0),Quaternion.Euler(0,0,deg),Vector3.one); Box(new Rect(-len*.5f,-thick*.5f,len,thick),col); GUI.matrix=old; }
@@ -16,7 +16,7 @@ public partial class OrbitSnake
     static void Arc(Vector2 c,float r,float start,float sweep,float thick,Color col){ int n=Mathf.Max(6,(int)(sweep/8)); float step=sweep/n; for(int i=0;i<n;i++){ float a=(start+(i+.5f)*step)*Mathf.Deg2Rad; Bar(c+new Vector2(Mathf.Cos(a),Mathf.Sin(a))*r,r*step*Mathf.Deg2Rad+1.5f,thick,start+(i+.5f)*step+90,col); } }
     static float Pulse(float hz) => .5f+.5f*Mathf.Sin(Time.unscaledTime*hz*Mathf.PI*2);
     // The one and only label in the HUD: an integer. OrbitVerification counts GUI.Label calls in this file and expects one.
-    void Digits(Rect r,int v){ GUI.Label(r,v.ToString(),digits); }
+    void Digits(Rect r,int v,GUIStyle style=null){ var keep=digits; if(style!=null)digits=style; GUI.Label(r,v.ToString(),digits); digits=keep; }
 
     // The skill glyphs, same shapes as the pods, drawn in a square.
     public static void Glyph2D(Skill s,Rect r,Color col)
@@ -51,6 +51,8 @@ public partial class OrbitSnake
         for(int i=0;i<ShellAltitude.Length;i++){ bool lit=i<=level; Color c=lit?(i==level?(ejectPulse>0?Color.Lerp(Lit,Color.white,Pulse(3)):load):Lit):Dim; Arc(sc,20+i*9,135,270,4,c); }
         // Score, digits only, top right.
         Digits(new Rect(Width-330,26,300,60),score);
+        // Best score, small and dim under the score; gold and breathing when this run beat it.
+        if(best>0){ var bs=new GUIStyle(small); if(newBest)bs.normal.textColor=Color.Lerp(new Color(1,.85f,.3f),Color.white,Pulse(1.2f)); Digits(new Rect(Width-330,74,300,30),best,bs); }
         // Train pips against the quota, bottom centre. Filled pips are the segments held; past the quota they turn gold.
         int q=Quota; int n=ship.segments.Count; int slots=Mathf.Max(q,n); float pw=22,gap=8; float x0=Width*.5f-(slots*pw+(slots-1)*gap)*.5f;
         for(int i=0;i<slots;i++){ bool filled=i<n; bool extra=i>=q; Color c=!filled?Dim:extra?new Color(1,.85f,.3f):(EjectReady?Color.Lerp(Ready,Color.white,Pulse(1.5f)*.5f):Lit); Box(new Rect(x0+i*(pw+gap),Height-64,pw,pw),c); if(!filled)Box(new Rect(x0+i*(pw+gap)+3,Height-61,pw-6,pw-6),new Color(0,0,0,.35f)); }
@@ -67,6 +69,7 @@ public partial class OrbitSnake
             if(won)for(int i=0;i<ShellAltitude.Length;i++)Arc(new Vector2(Width*.5f,Height*.5f-30),40+i*14,0,360,5,Color.Lerp(Lit,Color.white,Pulse(1)));
             else Arc(new Vector2(Width*.5f,Height*.5f-30),60,0,360,6,new Color(1,.3f,.2f,t));
             Digits(new Rect(Width*.5f-150,Height*.5f-56,300,60),score);
+            if(best>0){ var bs=new GUIStyle(small); bs.alignment=TextAnchor.UpperCenter; if(newBest)bs.normal.textColor=Color.Lerp(new Color(1,.85f,.3f),Color.white,Pulse(1.2f)); Digits(new Rect(Width*.5f-150,Height*.5f+4,300,30),best,bs); }
             EnterGlyph(new Vector2(Width*.5f,Height*.5f+90),60,new Color(1,1,1,.4f+.4f*Pulse(1)*t));
         }
     }
