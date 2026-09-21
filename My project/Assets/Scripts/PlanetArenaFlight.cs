@@ -165,7 +165,9 @@ public partial class ArenaPilot : MonoBehaviour
         // Every 10 units of cargo is +4% weight and +3% drag, capped: a full hold is the price of greed, for the AI as much as the player.
         Vector3 gravity=-up*(AerialCombatPrototype.Gravity(transform.position)*(1+Mathf.Min(.6f,cargo*.004f)));
         Vector3 thrust=f*(throttle*12+(burner?28:0));
-        Vector3 drag=-velocity*speed*((.00115f*density+.00004f)*(1+Mathf.Min(.45f,cargo*.003f)));
+        // The residual term is the vacuum: .00012 (was .00004) is invisible against .00115*density below 300 m but
+        // triples the deceleration up where nothing else acts, so a launched aircraft comes home in seconds, not minutes.
+        Vector3 drag=-velocity*speed*((.00115f*density+.00012f)*(1+Mathf.Min(.45f,cargo*.003f)));
         velocity+=(gravity+thrust+drag+lift)*dt;
         // Aerodynamic sideslip damping redirects momentum without snapping the position or speed.
         float align=Mathf.Clamp01(dt*density*1.5f*stall);

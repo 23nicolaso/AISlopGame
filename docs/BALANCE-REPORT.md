@@ -30,7 +30,9 @@ Nobody has hand-flown RIFT since the shared flight model landed, and manual veri
 | 11 | astern pitch clamp removed (bank-and-pull reversal restored) | 2–5 | 1–3 | 4–6 | 1275 | retaliation check green again; projectile check red: the energy rule pushed the nose down on a climbing gun pass |
 | 12 | ring latched once chosen; energy rule suspended while intercepting; overcharge check re-staged for the new layout | 1–3 | 1–2 | 2–9 | 1454 | both suites green again; DustRunner (low-orbit spawn) banked 0 in every match |
 | 13 | pitch 44→58 and yaw 27→34 deg/s at full authority; throttle .5 inside 300 m of a wreck | 4–7 | 1–3 | 2–3 | 1021 | a replay showed a 250 m turning circle against a 100 m field; kills now land in every minute of the match |
-| 14 | thrust allowed above 650 m when the nose is below the horizon (was cut outright past 800 m); run-in point times out after 12 s | **5–9** | 1–5 | **5–11** | 962 | bank sampler had laden pilots pointing at their ring with zero stick while coasting away — above the air the engine is the only control |
+| 14 | thrust allowed above 650 m when the nose is below the horizon (was cut outright past 800 m); run-in point times out after 12 s | 5–9 | 1–5 | 5–11 | 962 | bank sampler had laden pilots pointing at their ring with zero stick while coasting away — above the air the engine is the only control |
+| 15 | nothing chased above 560 m (rivals included); dive above 800 m capped at 37°; no power while sinking > 40 m/s up there | 4–10 | 3 | 8–13 | 977 | every round-14 launch began as a Search/Intercept after a contact already in vacuum; launches themselves unchanged (23), so the remaining altitude time is the descent, not the climb |
+| 16 | residual (vacuum) drag .00004 → .00012 — six matches against a six-match baseline | **4–14, mean 10.3** (was 6.3) | **0–1** (was 0–4) | **7–10, mean 8.8** (was 7.8) | **464** (was 980) | launches 42 → 9 in six matches, ceiling deaths 11 → 0, time above 650 m 92 → 38 s per pilot; below 300 m the term is invisible next to the density drag, so nothing on the fields changed |
 
 ## What the traces taught
 
@@ -39,17 +41,17 @@ Nobody has hand-flown RIFT since the shared flight model landed, and manual veri
 - **A whole planet is too big for eight aircraft.** With 950 m of sight and a 640 m horizon at 170 m, six sites 55° apart never see each other. Clustering them 32° apart is what finally puts two aircraft in the same sky on purpose.
 - **Turn radius decides banking.** A 105 m ring cannot be flown from inside a 240 m (thick air) or 640 m (460 m field) turning circle; the AI now sets up a straight run-in.
 
-## Final run (round 14, three matches)
+## Final run (round 16, six matches — `docs/balance/six-match-drag.json`; baseline six in `six-match.json`)
 
-| Metric | Baseline | Now | Target |
+| Metric | Baseline (round 1) | Now | Target |
 |---|---|---|---|
-| Kills per match | 0–2 | 5–9 (23 in 3 matches, in every minute) | ≥ 15 |
+| Kills per match | 0–2 | 4–14, mean 10.3, in every minute | ≥ 15 |
 | First kill | 7 s – never | 5–6 s in every match | ≤ 45 s |
-| Self-inflicted deaths per match | 14–16 | 1–5 (8 of 31 deaths) | < 25 % — met |
-| Seconds a pilot holds a target | 351 / 24 pilot-matches | 1198 | — |
-| AI cannon hit rate | 33 % of very few shots | 17 % of 760 | 10–30 % |
-| Cargo banks per match | 5–8 | 5–11 (claims 10–15) | ≥ 16 |
-| Pilots with 0 banked | 6–8 of 8 | 1 of 8 | 0 |
-| Mean altitude | ~450 (then 1990 mid-series) | 962 | — |
+| Self-inflicted deaths per match | 14–16 | 0–1 (2 of 64 deaths, both burns) | < 25 % — met |
+| Seconds a pilot holds a target | 351 / 24 pilot-matches | ~1300 / 24 | — |
+| AI cannon hit rate | 33 % of very few shots | 19 % | 10–30 % — met |
+| Cargo banks per match | 5–8 | 7–10, mean 8.8 (claims 7–18) | ≥ 16 |
+| Pilots with 0 banked | 6–8 of 8 | 1.2 of 8 | 0 |
+| Mean altitude | ~450 (then 1990 mid-series) | 464 | — |
 
-Kills are at about half the target and banking is now inside the range the baseline had while everything else improved around it. One pilot per match still banks nothing (ROOK or STDY, both low-orbit spawns), and 89 s of every pilot's match is still spent above 650 m; those two are the next levers, and both have telemetry pointed at them. The harness is what makes the next round cheap: `scratchpad/balance.sh 3` is eleven minutes.
+Two targets are met, kills sit at two thirds of the target with the best matches exceeding it, and banking is the one loop still short by half. The pilot without a bank is nearly always a low-orbit spawn (ROOK or STDY), and that is the next lever. The harness is what makes the next round cheap: `scratchpad/balance.sh 6` is about twenty minutes.
