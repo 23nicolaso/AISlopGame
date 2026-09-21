@@ -209,7 +209,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
 
     public void Damage(ArenaPilot p,float damage,ArenaPilot attacker)
     {
-        if(!p.Alive || p.invulnerable>0 || paused) return;
+        if(!p.Alive || p.invulnerable>0 || paused || !MatchActive) return;
         if(attacker && attacker!=p){p.NotifyAttacked(attacker);attacker.hitsLanded++;}
         if(p.health<=damage) { Kill(p,attacker); return; }
         p.health-=damage;
@@ -247,7 +247,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
 
     public void Collect(ArenaPilot p,SalvageShard s)
     {
-        if(!p.Alive || !s || s.claimed) return;
+        if(!p.Alive || !s || s.claimed || paused || !MatchActive) return;
         Vector3 at=s.transform.position;
         s.claimed=true; p.cargo+=s.value; shards.Remove(s); Destroy(s.gameObject);
         Feedback("small",at,p,collectSound);
@@ -277,7 +277,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
 
     public bool Shoot(ArenaPilot p,bool seeker=false,Transform preferredTarget=null)
     {
-        if(!p.Alive || paused || p.fireCooldown>0 || p.heat>.92f) return false;
+        if(!p.Alive || paused || !MatchActive || p.fireCooldown>0 || p.heat>.92f) return false;
         Vector3 targetVelocity; Transform target;
         if(preferredTarget)
         {
@@ -347,7 +347,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
         hitStop=Mathf.Max(0,hitStop-Time.unscaledDeltaTime);
         Time.timeScale=paused?0:(hitStop>0?.05f:1);
         if(paused) { engineSource.volume=0; return; }
-        float dt=Time.deltaTime; elapsed+=dt;
+        float dt=Time.deltaTime; elapsed+=dt; MatchTick(dt);
+        if(k!=null && phase==MatchPhase.Ended && k.enterKey.wasPressedThisFrame) RestartMatch();
         hitFlash=Mathf.Max(0,hitFlash-dt); damageFlash=Mathf.Max(0,damageFlash-dt);
         // Purely visual timers run on unscaled time so hit-stop does not stretch a banner or a hit wedge.
         float raw=Time.unscaledDeltaTime;
