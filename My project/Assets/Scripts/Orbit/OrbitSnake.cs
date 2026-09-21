@@ -10,14 +10,15 @@ using UnityEngine.SceneManagement;
 public partial class OrbitSnake : MonoBehaviour
 {
     public static OrbitSnake I;
-    public const float PlanetRadius=300f;
+    // A small planet: a lap of the first shell is 20 s at 60 u/s, and the horizon curves inside the frame.
+    public const float PlanetRadius=160f;
     // Shell altitudes by level. Each climb is into a belt that was never swept.
-    public static readonly float[] ShellAltitude={40,72,108,150,200};
+    public static readonly float[] ShellAltitude={30,55,85,120,160};
     public static readonly string[] ShellNames={"LOW ORBIT","MID ORBIT","HIGH ORBIT","DEEP FIELD","ESCAPE"};
     // Segments Space needs before it will eject the train and lift the ship one shell.
     public static readonly int[] EjectQuota={4,6,8,10};
-    // Junk per shell in the greybox; the field is denser the higher you climb.
-    public static readonly int[] JunkCount={22,32,44,58,0};
+    // Junk per shell: about one piece per 11 000 u^2 of shell, so at 60 u/s the snake meets something every few seconds.
+    public static readonly int[] JunkCount={40,60,80,100,0};
     // 60 u/s at 150 deg/s is a 23 u turning circle (144 u round): a train past ~20 segments can be bitten by its own head,
     // which is the classic snake stake and the reason the eject quota climbs.
     public const float Speed=60f, TurnRate=150f, JunkSpeedMin=.55f, JunkSpeedMax=.9f;
@@ -60,9 +61,10 @@ public partial class OrbitSnake : MonoBehaviour
     public void Restart(int seed)
     {
         rng=new System.Random(seed);
-        foreach(var j in junk)Destroy(j.gameObject); junk.Clear();
-        foreach(var f in falling)Destroy(f.gameObject); falling.Clear();
-        if(ship)Destroy(ship.gameObject);
+        // Immediate, not deferred: the checks and the screenshot runner restart several times inside one frame.
+        foreach(var j in junk)DestroyImmediate(j.gameObject); junk.Clear();
+        foreach(var f in falling)DestroyImmediate(f.gameObject); falling.Clear();
+        if(ship)DestroyImmediate(ship.gameObject);
         elapsed=0; level=0; score=0; caught=0; strikes=0; ended=false; won=false; paused=false; endReason=""; feed.Clear(); toast=""; toastTimer=0; ejectPulse=strikePulse=catchPulse=0; lastEjected=0;
         ship=new GameObject("Snake").AddComponent<OrbitShip>(); ship.transform.SetParent(world);
         ship.Init(Vector3.up,Vector3.forward,ShellRadius(0)); BuildShipArt(ship);

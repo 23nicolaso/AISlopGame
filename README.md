@@ -57,6 +57,17 @@ The same suites are also Editor menu items that run in Play Mode:
 
 Both throw on failure and log a `PASS` line on success.
 
+## ORBIT SNAKE (greybox, second game)
+
+![Orbit Snake: the train through a turn, junk tinted by the catch rule](./docs/orbit-train.png)
+
+A snake on the shell of a junk-choked planet, in the same project and the same zero-asset style. Constant speed, one control (turn), one button (Space). Junk rides great circles; come up behind it with a matching heading and it becomes a segment, hit it any other way and you shed two. Bite your own tail and the loose segments become wreckage on the shell. At the quota, Space throws the whole train into the atmosphere and lifts you into the next, denser shell.
+
+```bash
+"$UNITY" -batchmode -nographics -projectPath "$PROJECT" -executeMethod OrbitHeadlessRunner.Run -logFile /tmp/orbit-verify.log   # 11 rule checks
+"$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -executeMethod RiftBuild.OrbitMacOS -logFile /tmp/orbit-build.log  # Builds/ORBIT.app
+```
+
 ## Tooling
 
 - [`AGENTS.md`](./AGENTS.md) — architecture notes and constraints for AI coding agents.

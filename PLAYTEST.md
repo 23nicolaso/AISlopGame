@@ -3,6 +3,8 @@
 Open `My project` in Unity and play `Assets/Scenes/SampleScene.unity`.
 The arena builds automatically; no downloaded assets or start menu are required.
 
+> **Second game in this project — ORBIT SNAKE (greybox).** Play `Assets/Scenes/OrbitSnake.unity` (or `open Builds/ORBIT.app`). A/D or ←/→ turn, Space ejects the train, Esc pauses, Enter restarts. You walk a shell above a small planet at constant speed; junk rides great circles of the same shell. Come up **behind** a piece so your heading matches its motion (it turns green when it will) and it latches on as a segment. Meet it any other way (red) and you lose the two hindmost segments; with none left, you're done. Touch your own tail past the neck and it severs — the loose segments become wreckage on this shell and come round again. When the train reaches the shell's quota (4 → 6 → 8 → 10) Space throws it all into the atmosphere for `n²·5 + 50·level` points and lifts you one shell into a denser field. Five shells; the fifth is escape. Design notes in `docs/ORBIT-SNAKE-DESIGN.md`; headless checks via `-executeMethod OrbitHeadlessRunner.Run`, screenshots via `OrbitScreenshotRunner.Run`, build via `RiftBuild.OrbitMacOS`.
+
 ## The loop
 
 - Shoot the glowing gold reactors on derelict ships. Fly close to the released gold salvage to collect it.

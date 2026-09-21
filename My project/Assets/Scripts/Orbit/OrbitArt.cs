@@ -24,6 +24,9 @@ public partial class OrbitSnake
         for(int i=0;i<12;i++){ var ring=new GameObject("Grid").AddComponent<LineRenderer>(); ring.transform.SetParent(world,false); ring.useWorldSpace=true; ring.loop=true; ring.positionCount=96; ring.widthMultiplier=.6f; ring.sharedMaterial=Mat(new Color(.3f,.38f,.48f),true);
             var q=i<6?Quaternion.AngleAxis(i*30,Vector3.up)*Quaternion.AngleAxis(90,Vector3.right):Quaternion.identity; float lat=(i-6)*25-50; float r=i<6?PlanetRadius+.5f:Mathf.Cos(lat*Mathf.Deg2Rad)*(PlanetRadius+.5f); float y=i<6?0:Mathf.Sin(lat*Mathf.Deg2Rad)*(PlanetRadius+.5f);
             for(int k=0;k<96;k++){ float a=k*Mathf.PI*2/96; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } }
+        // Star field: 500 unlit specks on a far sphere, fixed seed so the screenshot runs compare.
+        var stars=new GameObject("Stars"); stars.transform.SetParent(world,false); var starMat=Mat(new Color(.7f,.75f,.85f),true); var sr=new System.Random(3);
+        for(int i=0;i<500;i++){ float z=(float)sr.NextDouble()*2-1,a=(float)sr.NextDouble()*Mathf.PI*2,r=Mathf.Sqrt(1-z*z); Shape("Star",stars.transform,PrimitiveType.Cube,new Vector3(r*Mathf.Cos(a),z,r*Mathf.Sin(a))*1500,Vector3.one*(2+(float)sr.NextDouble()*3),starMat); }
         var sun=new GameObject("Sun").AddComponent<Light>(); sun.transform.SetParent(world); sun.type=LightType.Directional; sun.intensity=2f; sun.color=new Color(1,.95f,.85f); sun.transform.rotation=Quaternion.Euler(35,-40,0);
         RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Flat; RenderSettings.ambientLight=new Color(.22f,.25f,.32f); RenderSettings.skybox=null; RenderSettings.fog=false;
     }
@@ -50,15 +53,15 @@ public partial class OrbitSnake
     }
     public void BuildJunkArt(OrbitJunk j)
     {
-        var body=Shape("Body",j.transform,PrimitiveType.Cube,Vector3.zero,j.wreck?new Vector3(2.4f,2.4f,3.2f):new Vector3(2.6f,1.4f,2.2f),j.wreck?wreckMat:junkStrike); j.body=body.GetComponent<Renderer>();
-        if(!j.wreck)Shape("Panel",j.transform,PrimitiveType.Cube,new Vector3(0,0,1.6f),new Vector3(1,.15f,3),junkStrike).GetComponent<Renderer>().sharedMaterial=junkStrike;
+        var body=Shape("Body",j.transform,PrimitiveType.Cube,Vector3.zero,j.wreck?new Vector3(2.4f,2.4f,3.2f):new Vector3(3.4f,2f,3f),j.wreck?wreckMat:junkStrike); j.body=body.GetComponent<Renderer>();
+        if(!j.wreck)Shape("Panel",j.transform,PrimitiveType.Cube,new Vector3(0,0,2.4f),new Vector3(1.4f,.2f,4),junkStrike);
     }
     public void BuildFallingArt(OrbitFalling f){ Shape("Ember",f.transform,PrimitiveType.Sphere,Vector3.zero,Vector3.one*2.4f,fallMat); }
 
     // Junk within reach ahead is tinted by the rule that will decide the contact: green if the heading matches, red if not.
     public void TintJunk()
     {
-        foreach(var j in junk){ if(!j.body)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<120; Material m=j.wreck?wreckMat:(near&&Vector3.Angle(ship.tangent,j.Direction)<CatchAngle?junkCatch:junkStrike); if(j.body.sharedMaterial!=m)j.body.sharedMaterial=m; }
+        foreach(var j in junk){ if(!j.body)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:(near&&Vector3.Angle(ship.tangent,j.Direction)<CatchAngle?junkCatch:junkStrike); if(j.body.sharedMaterial!=m)j.body.sharedMaterial=m; }
     }
 
     void BuildCamera()
@@ -69,7 +72,7 @@ public partial class OrbitSnake
     }
     // Chase camera high enough that the horizon and the junk lanes ahead are in frame; up is the shell normal so the
     // planet always sits at the bottom of the screen. Snapped on restart, smoothed in play.
-    Vector3 CamTarget(out Vector3 look,out Vector3 up){ up=ship.normal; look=ship.Position+ship.tangent*30; return ship.Position+ship.normal*34-ship.tangent*52; }
+    Vector3 CamTarget(out Vector3 look,out Vector3 up){ up=ship.normal; look=ship.Position+ship.tangent*34; return ship.Position+ship.normal*20-ship.tangent*34; }
     public void SnapCamera(){ camPos=CamTarget(out camLook,out camUp); ApplyCamera(); }
     void UpdateCamera(float dt)
     {
