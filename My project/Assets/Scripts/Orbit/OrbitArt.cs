@@ -7,7 +7,7 @@ public partial class OrbitSnake
 {
     Material planetMat, hullMat, segMat, junkCatch, junkStrike, wreckMat, fallMat, glowMat;
     AudioSource audioSrc; AudioClip[] pings=new AudioClip[4]; AudioClip[] chimes=new AudioClip[5];
-    Camera shotCam; Vector3 camPos, camLook, camUp;
+    Vector3 camPos, camUp;
 
     Material Mat(Color c,bool unlit){ var m=new Material(Shader.Find(unlit?"Universal Render Pipeline/Unlit":"Universal Render Pipeline/Lit")); m.SetColor("_BaseColor",c); m.color=c; if(!unlit){m.SetFloat("_Metallic",.2f);m.SetFloat("_Smoothness",.35f);} owned.Add(m); return m; }
     GameObject Shape(string name,Transform parent,PrimitiveType type,Vector3 pos,Vector3 scale,Material mat)
@@ -20,10 +20,11 @@ public partial class OrbitSnake
         fallMat=Mat(new Color(1.4f,.6f,.15f),true); glowMat=Mat(new Color(.4f,1.1f,1.4f),true);
         var planet=new GameObject("Planet"); planet.transform.SetParent(world,false);
         planet.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius,64,32); planet.AddComponent<MeshRenderer>().sharedMaterial=planetMat;
-        // Faint latitude/longitude grid on the planet so motion over it reads even on a flat material.
-        for(int i=0;i<12;i++){ var ring=new GameObject("Grid").AddComponent<LineRenderer>(); ring.transform.SetParent(world,false); ring.useWorldSpace=true; ring.loop=true; ring.positionCount=96; ring.widthMultiplier=.6f; ring.sharedMaterial=Mat(new Color(.3f,.38f,.48f),true);
-            var q=i<6?Quaternion.AngleAxis(i*30,Vector3.up)*Quaternion.AngleAxis(90,Vector3.right):Quaternion.identity; float lat=(i-6)*25-50; float r=i<6?PlanetRadius+.5f:Mathf.Cos(lat*Mathf.Deg2Rad)*(PlanetRadius+.5f); float y=i<6?0:Mathf.Sin(lat*Mathf.Deg2Rad)*(PlanetRadius+.5f);
-            for(int k=0;k<96;k++){ float a=k*Mathf.PI*2/96; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } }
+        // Latitude/longitude grid every 15 degrees: seen from straight above, it is the only thing that shows speed.
+        var gridMat=Mat(new Color(.3f,.38f,.48f),true);
+        for(int i=0;i<23;i++){ var ring=new GameObject("Grid").AddComponent<LineRenderer>(); ring.transform.SetParent(world,false); ring.useWorldSpace=true; ring.loop=true; ring.positionCount=128; ring.widthMultiplier=.7f; ring.sharedMaterial=gridMat;
+            bool lon=i<12; var q=lon?Quaternion.AngleAxis(i*15,Vector3.up)*Quaternion.AngleAxis(90,Vector3.right):Quaternion.identity; float lat=(i-12)*15-75; float r=lon?PlanetRadius+.5f:Mathf.Cos(lat*Mathf.Deg2Rad)*(PlanetRadius+.5f); float y=lon?0:Mathf.Sin(lat*Mathf.Deg2Rad)*(PlanetRadius+.5f);
+            for(int k=0;k<128;k++){ float a=k*Mathf.PI*2/128; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } }
         // Star field: 500 unlit specks on a far sphere, fixed seed so the screenshot runs compare.
         var stars=new GameObject("Stars"); stars.transform.SetParent(world,false); var starMat=Mat(new Color(.7f,.75f,.85f),true); var sr=new System.Random(3);
         for(int i=0;i<500;i++){ float z=(float)sr.NextDouble()*2-1,a=(float)sr.NextDouble()*Mathf.PI*2,r=Mathf.Sqrt(1-z*z); Shape("Star",stars.transform,PrimitiveType.Cube,new Vector3(r*Mathf.Cos(a),z,r*Mathf.Sin(a))*1500,Vector3.one*(2+(float)sr.NextDouble()*3),starMat); }
@@ -41,20 +42,21 @@ public partial class OrbitSnake
 
     public void BuildShipArt(OrbitShip s)
     {
-        Shape("Hull",s.transform,PrimitiveType.Capsule,Vector3.zero,new Vector3(2.2f,1.6f,2.2f),hullMat).transform.localRotation=Quaternion.Euler(90,0,0);
-        Shape("Nose",s.transform,PrimitiveType.Sphere,new Vector3(0,0,1.8f),Vector3.one*1.5f,glowMat);
-        Shape("Fin L",s.transform,PrimitiveType.Cube,new Vector3(-1.6f,0,-.6f),new Vector3(1.8f,.2f,1.2f),hullMat);
-        Shape("Fin R",s.transform,PrimitiveType.Cube,new Vector3(1.6f,0,-.6f),new Vector3(1.8f,.2f,1.2f),hullMat);
+        // Everything is 1.5x for the 120 u top-down camera; the nose glow and fins make the heading readable from above.
+        Shape("Hull",s.transform,PrimitiveType.Capsule,Vector3.zero,new Vector3(3.2f,2.4f,3.2f),hullMat).transform.localRotation=Quaternion.Euler(90,0,0);
+        Shape("Nose",s.transform,PrimitiveType.Sphere,new Vector3(0,0,2.8f),Vector3.one*2.2f,glowMat);
+        Shape("Fin L",s.transform,PrimitiveType.Cube,new Vector3(-2.4f,0,-1),new Vector3(2.8f,.3f,1.8f),hullMat);
+        Shape("Fin R",s.transform,PrimitiveType.Cube,new Vector3(2.4f,0,-1),new Vector3(2.8f,.3f,1.8f),hullMat);
     }
     public Transform BuildSegmentArt(OrbitShip s,int index)
     {
-        var g=Shape("Segment "+index,world,PrimitiveType.Cube,Vector3.zero,new Vector3(2.4f,2.4f,3.2f),segMat);
+        var g=Shape("Segment "+index,world,PrimitiveType.Cube,Vector3.zero,new Vector3(3.6f,3.6f,4.8f),segMat);
         Shape("Band",g.transform,PrimitiveType.Cube,Vector3.zero,new Vector3(1.1f,1.1f,.3f),glowMat); return g.transform;
     }
     public void BuildJunkArt(OrbitJunk j)
     {
-        var body=Shape("Body",j.transform,PrimitiveType.Cube,Vector3.zero,j.wreck?new Vector3(2.4f,2.4f,3.2f):new Vector3(3.4f,2f,3f),j.wreck?wreckMat:junkStrike); j.body=body.GetComponent<Renderer>();
-        if(!j.wreck)Shape("Panel",j.transform,PrimitiveType.Cube,new Vector3(0,0,2.4f),new Vector3(1.4f,.2f,4),junkStrike);
+        var body=Shape("Body",j.transform,PrimitiveType.Cube,Vector3.zero,j.wreck?new Vector3(3.6f,3.6f,4.8f):new Vector3(5f,3f,4.5f),j.wreck?wreckMat:junkStrike); j.body=body.GetComponent<Renderer>();
+        if(!j.wreck)Shape("Panel",j.transform,PrimitiveType.Cube,new Vector3(0,0,3.6f),new Vector3(2,.3f,6),junkStrike);
     }
     public void BuildFallingArt(OrbitFalling f){ Shape("Ember",f.transform,PrimitiveType.Sphere,Vector3.zero,Vector3.one*2.4f,fallMat); }
 
@@ -70,18 +72,18 @@ public partial class OrbitSnake
         cam.clearFlags=CameraClearFlags.SolidColor; cam.backgroundColor=new Color(.01f,.012f,.03f); cam.fieldOfView=62; cam.nearClipPlane=1; cam.farClipPlane=2000;
         cam.gameObject.AddComponent<AudioListener>();
     }
-    // Chase camera high enough that the horizon and the junk lanes ahead are in frame; up is the shell normal so the
-    // planet always sits at the bottom of the screen. Snapped on restart, smoothed in play.
-    Vector3 CamTarget(out Vector3 look,out Vector3 up){ up=ship.normal; look=ship.Position+ship.tangent*34; return ship.Position+ship.normal*20-ship.tangent*34; }
-    public void SnapCamera(){ camPos=CamTarget(out camLook,out camUp); ApplyCamera(); }
-    void UpdateCamera(float dt)
+    // Top-down, rigid: the camera sits CamHeight above the head looking straight down the normal, no lag, no shake, so
+    // the ship is pinned to the screen centre and only the world moves. Screen-up is a tangent vector parallel-transported
+    // along the path (re-projected onto each new tangent plane, never rotated about the normal): turning spins the ship
+    // on screen, not the world. The chase camera and its flicking made the user seasick; strikes flash the HUD instead.
+    const float CamHeight=85f;
+    public void SnapCamera(){ camUp=ship.tangent; ApplyCamera(); }
+    void UpdateCamera(float dt){ ApplyCamera(); TintJunk(); }
+    void ApplyCamera()
     {
-        Vector3 p=CamTarget(out var look,out var up); float k=1-Mathf.Exp(-dt*6);
-        camPos=Vector3.Lerp(camPos,p,k); camLook=Vector3.Lerp(camLook,look,k); camUp=Vector3.Slerp(camUp,up,k);
-        if(ship.shake>0){ camPos+=Random.insideUnitSphere*ship.shake*1.2f; }
-        ApplyCamera(); TintJunk();
+        camUp=(camUp-ship.normal*Vector3.Dot(camUp,ship.normal)).normalized; if(camUp.sqrMagnitude<.5f)camUp=ship.tangent;
+        camPos=ship.Position+ship.normal*CamHeight; cam.transform.position=camPos; cam.transform.rotation=Quaternion.LookRotation(-ship.normal,camUp);
     }
-    void ApplyCamera(){ cam.transform.position=camPos; cam.transform.rotation=Quaternion.LookRotation(camLook-camPos,camUp); }
 
     AudioClip Sound(string name,float length,float start,float end,float noise)
     {
