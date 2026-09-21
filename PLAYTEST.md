@@ -36,7 +36,18 @@ Lift, drag, gravity, momentum, stall behavior, and thinner air affect flight. Th
 
 While playing, use `Rift > Verify planetary arena` for deterministic checks of population, collection, banking, contest, cargo drops, score retention, player and rival respawning, pause behavior, swept hit detection, and neutral flight. The check resets pilot positions and changes temporary match state.
 
-The atmosphere/suborbital screenshot menu entries stage and pause the camera; `Rift > Return to launch` resumes. Screenshots are in `My project/Captures`.
+The atmosphere/suborbital screenshot menu entries stage and pause the camera; `Rift > Return to launch` resumes. Hand-taken screenshots live in `My project/Assets/Screenshots/`.
+
+Both verification suites and the screenshots also run without anyone at the keyboard. With the Editor closed:
+
+```bash
+UNITY="/Applications/Unity/Hub/Editor/6000.6.1f1/Unity.app/Contents/MacOS/Unity"
+PROJECT="/Users/lishuyu/Codes/AISlopGame/My project"
+# Both Rift*Verification suites. Exit 0 = pass, 1 = a check failed, 2 = never reached Play Mode (compile error).
+"$UNITY" -batchmode -nographics -projectPath "$PROJECT" -executeMethod RiftHeadlessRunner.Run -logFile /tmp/rift-verify.log
+# Five staged camera renders into docs/screenshots/ (no -nographics: this one needs the GPU). Exit 1 on a black or flat frame.
+"$UNITY" -batchmode -projectPath "$PROJECT" -executeMethod RiftScreenshotRunner.Run -logFile /tmp/rift-shots.log
+```
 
 An accelerated autonomous run also verified all seven rivals earning banked scores and continuing across deaths. This is a smoke test, not a full balance or human-control playtest.
 

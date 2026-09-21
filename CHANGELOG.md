@@ -27,6 +27,8 @@
 - `docs/IMPROVEMENT-PLAN.md`：把改进计划从"分阶段修补"重写为五个工作包的成品打磨框架，新增对照 fps-shooter 八项必备系统的完整度差距分析、按 game-feel 数值标准设计的反馈分层表，以及三处"最像半成品"的定位与整改方案。
 - `PlanetSurface.shader`：菲涅尔边缘光，低空飞行时星球轮廓能从黑天空里分出来。
 - `RiftVerification`：两项确定性校验——货物被最近的 pilot 吸引、进入拾取半径后自动 `Collect`。PASS 日志串加入 `shard attraction`。
+- **无人值守校验入口** `Assets/Editor/RiftHeadlessRunner.cs`（`dc4e172`）：`-batchmode -nographics -executeMethod RiftHeadlessRunner.Run`（不带 `-quit`）自动进入 Play Mode、依次跑两套 `Rift*Verification`，退出码 0 = 全过、1 = 有检查失败、2 = 90 s 内没进入 Play Mode（通常是编译错误）。
+- **无人值守截图入口** `Assets/Editor/RiftScreenshotRunner.cs`：`-batchmode -executeMethod RiftScreenshotRunner.Run`（不能带 `-nographics`）进入 Play Mode 后摆五个固定机位（发射点 / 亚轨道 / 精炼环 / 残骸场 / 交战），把追尾相机渲染进 1920×1080 RenderTexture 写成 PNG 到 `docs/screenshots/`（可用环境变量 `RIFT_SHOT_DIR` 覆盖）。每张图做平均亮度与对比度自检，纯黑或纯色帧直接判失败退出 1，所以它同时也是"渲染管线没坏"的回归测试。IMGUI HUD 不经过 `Camera.Render()`，截图里没有 HUD。
 - 本文件。
 
 ### Changed
@@ -39,6 +41,11 @@
 - 重新平衡发光材质的 HDR 值（teal / red / gold / white / violet），从 1.9–2.0 压到 1.14–1.5，避免 Bloom 阈值 1 之上的超额亮度糊成白团。
 - 星球表面贴图从"海洋 / 陆地"两档改为五档（深海 / 浅滩 / 滩涂 / 陆地 / 山脊雪线）并整体提亮；`PlanetSurface.shader` 的夜侧底光从 `.32` 提到 `.44`。
 - 环境光从 `Flat` 改为 `Trilight`（冷青天空 / 深蓝赤道 / 暖橙地面），机身着色有了上下方向感。
+
+### Fixed
+
+- **AI 会永久放弃报复且一枪不开**（`c5f2956`）。校验项 "Returns fire on attacker despite carrying cargo" 在批次 2/3 之后一直失败，实机逐帧打点后发现是四个叠加的 bug 而非单纯转向慢：① `gateTarget` 在 tactic / 导航 / 油门三处都压过正在进行的交战，且决策块里 `else if(gateTarget)rivalTarget=null;` 会在 `retaliation` 归零那一帧清掉一个正在拉近的合法目标，之后不再重新扫描 —— 现在报复或 Alert 期间根本不计算 `gateTarget`，并删掉了那行强制清空；② Search 状态飞的是随自身位置漂移的方位角，改成记住并飞向 `lastKnownPosition` 绝对坐标（`NotifyAttacked` / 丢失接触 / 听见枪声三处写入）；③ 近距离脱离机动与开火共用同一门槛，贴脸那一帧被脱离拦住 —— 开火判定挪到脱离触发之前，且 `rivalTarget` 为空时 `breakTime=0`；④ 开火锥角 `<7°` 在共享飞行模型下弯道追击只能收敛到恰好 7.0°，放宽到 `<9°`。`RiftCombatVerification` 的报复窗口从 60 步放宽到 550 步（11 s），注释说明正后方受击的最坏几何需要 9–10 s 才能重新咬住。
+- `PLAYTEST.md` 里截图目录写成不存在的 `My project/Captures`，实际目录是 `docs/screenshots/`（由 `RiftScreenshotRunner` 生成）与历史的 `My project/Assets/Screenshots/`。
 
 ### Refactored
 
