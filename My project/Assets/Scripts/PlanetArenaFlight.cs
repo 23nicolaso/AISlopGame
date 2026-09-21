@@ -118,15 +118,16 @@ public class SalvageCore : MonoBehaviour
     public float health=65, cooldown;
     public Transform art, weakPoint;
     public bool Available => cooldown<=0 && health>0;
-    void Update()
+    void FixedUpdate() { Tick(Time.fixedDeltaTime); }
+    public void Tick(float dt)
     {
         var arena=AerialCombatPrototype.I; if(!arena || arena.paused) return;
         if(cooldown>0)
         {
-            cooldown-=Time.deltaTime;
+            cooldown-=dt;
             if(cooldown<=0){health=65;art.gameObject.SetActive(true);}
         }
-        else if(art) art.Rotate(0,Time.deltaTime*8,Time.deltaTime*3);
+        else if(art) art.Rotate(0,dt*8,dt*3);
         if(weakPoint) weakPoint.localScale=Vector3.one*(5.5f+Mathf.Sin(arena.elapsed*3)*.35f);
     }
     public void Hit(float damage,ArenaPilot shooter)
@@ -148,10 +149,11 @@ public class SalvageShard : MonoBehaviour
     public int value;
     public bool claimed;
     public float life=95;
-    void Update()
+    void FixedUpdate() { Tick(Time.fixedDeltaTime); }
+    public void Tick(float dt)
     {
         var g=AerialCombatPrototype.I; if(!g || g.paused || claimed) return;
-        float dt=Time.deltaTime; life-=dt;
+        life-=dt;
         if(life<=0) { g.shards.Remove(this); Destroy(gameObject); return; }
         transform.Rotate(18*dt,38*dt,15*dt);
         ArenaPilot nearest=null; float distance=48;
@@ -264,11 +266,12 @@ public class ArenaDebris : MonoBehaviour
 {
     public Vector3 velocity;
     public float life;
-    void Update()
+    void FixedUpdate() { Tick(Time.fixedDeltaTime); }
+    public void Tick(float dt)
     {
         var g=AerialCombatPrototype.I; if(g && g.paused)return;
-        life-=Time.deltaTime;transform.position+=velocity*Time.deltaTime;
-        transform.localScale*=Mathf.Exp(-2*Time.deltaTime);
+        life-=dt;transform.position+=velocity*dt;
+        transform.localScale*=Mathf.Exp(-2*dt);
         if(life<=0)Destroy(gameObject);
     }
 }

@@ -30,6 +30,17 @@ public static class RiftVerification
             g.SpawnShard(p.transform.position,9);
             var shard=g.shards[g.shards.Count-1];g.Collect(p,shard);g.Collect(p,shard);
             Check(p.cargo==9,"Collect exactly once");
+            // Deterministic fixed-dt sweep of the dt-parameterised shard: it must home on the nearest pilot inside 48 m and self-collect under 12 m.
+            foreach(var other in g.pilots)if(other!=p)other.transform.position=p.transform.position+p.transform.up*900;
+            g.SpawnShard(p.transform.position+p.transform.forward*30,7);
+            var drift=g.shards[g.shards.Count-1];bool drawn=false,collected=false;float startGap=Vector3.Distance(drift.transform.position,p.transform.position);
+            for(int i=0;i<150 && !collected;i++)
+            {
+                drift.Tick(.02f);collected=drift.claimed;
+                if(!collected && Vector3.Distance(drift.transform.position,p.transform.position)<startGap-1)drawn=true;
+            }
+            Check(drawn,"Shard is drawn toward the nearest pilot");
+            Check(collected && p.cargo==16,"Shard collects itself inside the pickup radius");
             var gate=g.gates[0];p.transform.position=gate.transform.position;p.cargo=40;
             foreach(var other in g.pilots)if(other!=p)other.transform.position=gate.transform.position+Vector3.right*500;
             gate.owner=-1;gate.claimant=-1;gate.progress=0;
@@ -44,7 +55,7 @@ public static class RiftVerification
             float minAlt=99999,maxSpeed=0;
             for(int i=0;i<500;i++){p.Simulate(.02f);minAlt=Mathf.Min(minAlt,p.Altitude);maxSpeed=Mathf.Max(maxSpeed,p.Speed);}
             Check(p.Alive && minAlt>15 && maxSpeed<250,"Ten seconds of neutral flight stays airborne");
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight. Neutral altitude="+p.Altitude.ToString("F1")+" speed="+p.Speed.ToString("F1"));
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight. Neutral altitude="+p.Altitude.ToString("F1")+" speed="+p.Speed.ToString("F1"));
         }
         finally
         {

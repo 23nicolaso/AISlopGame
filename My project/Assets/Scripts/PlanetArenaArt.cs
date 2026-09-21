@@ -134,10 +134,15 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         for(int y=0;y<512;y++)for(int x=0;x<1024;x++)
         {
             float n=Mathf.PerlinNoise(x*.008f,y*.014f)+.33f*Mathf.PerlinNoise(x*.027f,y*.031f);
-            Color c=n>.73f?Color.Lerp(new Color(.11f,.23f,.19f),new Color(.4f,.43f,.27f),Mathf.Clamp01((n-.73f)*2)):
-                Color.Lerp(new Color(.018f,.075f,.14f),new Color(.05f,.23f,.32f),Mathf.Clamp01(n));
+            // Five bands (abyss / shelf / strand / lowland / ridge-snow): the old two-band map read as black at low altitude once tonemapping was on.
+            Color c=
+                n<.60f?Color.Lerp(new Color(.042f,.115f,.225f),new Color(.075f,.255f,.405f),Mathf.InverseLerp(.18f,.60f,n)):
+                n<.70f?Color.Lerp(new Color(.085f,.315f,.455f),new Color(.175f,.495f,.525f),Mathf.InverseLerp(.60f,.70f,n)):
+                n<.745f?Color.Lerp(new Color(.53f,.48f,.34f),new Color(.34f,.4f,.26f),Mathf.InverseLerp(.70f,.745f,n)):
+                n<.95f?Color.Lerp(new Color(.205f,.375f,.245f),new Color(.5f,.47f,.3f),Mathf.InverseLerp(.745f,.95f,n)):
+                Color.Lerp(new Color(.66f,.685f,.645f),new Color(.88f,.92f,.95f),Mathf.InverseLerp(.95f,1.2f,n));
             float cloud=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.59f,.8f,Mathf.PerlinNoise(x*.013f+51,y*.022f)));
-            texture.SetPixel(x,y,Color.Lerp(c,new Color(.68f,.8f,.84f),cloud*.78f));
+            texture.SetPixel(x,y,Color.Lerp(c,new Color(.8f,.87f,.93f),cloud*.72f));
         }
         texture.Apply();owned.Add(texture);
         var mat=new Material(Shader.Find("Rift/PlanetSurface"));owned.Add(mat);mat.SetTexture("_BaseMap",texture);
@@ -182,7 +187,7 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         {
             float lat=i*360f/28;
             var p=SurfacePoint(lat,20*Mathf.Sin(i*2),60);
-            var cloud=Shape("Cloud bank",world,PrimitiveType.Sphere,p,new Vector3(100,5,45),Material(new Color(.34f,.5f,.59f),false));
+            var cloud=Shape("Cloud bank",world,PrimitiveType.Sphere,p,new Vector3(100,5,45),Material(new Color(.46f,.58f,.68f),false));
             cloud.transform.rotation=Quaternion.FromToRotation(Vector3.up,Up(p));
         }
     }

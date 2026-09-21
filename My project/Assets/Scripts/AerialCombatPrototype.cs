@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering.Universal;
 
 // Small-planet flight arena: distances/time are deliberately compressed for a class prototype.
 public partial class AerialCombatPrototype : MonoBehaviour
@@ -14,6 +15,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public readonly List<CaptureGate> gates = new List<CaptureGate>();
     public ArenaPilot player;
     public Camera cam;
+    public UniversalAdditionalCameraData camData;
     public bool paused;
     public float elapsed, hitFlash, damageFlash, shake;
     public Transform world;
@@ -52,18 +54,28 @@ public partial class AerialCombatPrototype : MonoBehaviour
         foreach(var l in FindObjectsByType<Light>()) l.enabled=false;
         world=new GameObject("Arena / generated assets").transform; world.SetParent(transform,false);
         alloy=Material(new Color(.62f,.69f,.76f),false); dark=Material(new Color(.025f,.043f,.07f),false);
-        teal=Material(new Color(.1f,1.5f,1.9f),true); red=Material(new Color(2f,.19f,.09f),true);
-        gold=Material(new Color(1.9f,1.1f,.18f),true); white=Material(new Color(.68f,.82f,1),true);
-        violet=Material(new Color(.7f,.3f,1.6f),true);
+        // Emissive values sit just over the volume's bloom threshold of 1: bright enough to bleed, low enough not to clip to white.
+        teal=Material(new Color(.09f,1.14f,1.44f),true); red=Material(new Color(1.5f,.16f,.07f),true);
+        gold=Material(new Color(1.45f,.84f,.14f),true); white=Material(new Color(.72f,.86f,1.06f),true);
+        violet=Material(new Color(.55f,.24f,1.32f),true);
         RenderSettings.skybox=null; RenderSettings.fog=false;
-        RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight=new Color(.42f,.48f,.58f);
+        // Trilight gives the hull shading a direction (cold sky above, warm ground bounce below) instead of flat fill.
+        RenderSettings.ambientMode=UnityEngine.Rendering.AmbientMode.Trilight;
+        RenderSettings.ambientSkyColor=new Color(.34f,.5f,.72f);
+        RenderSettings.ambientEquatorColor=new Color(.13f,.19f,.34f);
+        RenderSettings.ambientGroundColor=new Color(.36f,.25f,.17f);
+        RenderSettings.ambientIntensity=1;
         var sun=new GameObject("Sun").AddComponent<Light>(); sun.transform.SetParent(world);
         sun.type=LightType.Directional; sun.intensity=1.8f; sun.color=new Color(1,.9f,.78f);
         sun.transform.rotation=Quaternion.Euler(38,-28,0);
         cam=new GameObject("Arena chase camera").AddComponent<Camera>(); cam.transform.SetParent(world);
         cam.tag="MainCamera"; cam.clearFlags=CameraClearFlags.SolidColor;
         cam.backgroundColor=new Color(.012f,.025f,.055f); cam.fieldOfView=66; cam.farClipPlane=14000; cam.nearClipPlane=.2f;
+        // URP adds this data component with the Camera; cache it once instead of re-fetching, and opt the runtime camera into the scene's Global Volume.
+        camData=cam.GetUniversalAdditionalCameraData();
+        camData.renderPostProcessing=true;
+        camData.antialiasing=AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+        camData.antialiasingQuality=AntialiasingQuality.High;
         cam.gameObject.AddComponent<AudioListener>();
         audioSource=cam.gameObject.AddComponent<AudioSource>(); audioSource.volume=.6f;
         engineSource=cam.gameObject.AddComponent<AudioSource>(); engineSource.loop=true;
