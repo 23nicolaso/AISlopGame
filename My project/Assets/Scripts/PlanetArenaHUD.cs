@@ -3,7 +3,7 @@ using UnityEngine;
 
 public partial class AerialCombatPrototype
 {
-    GUIStyle small,normal,title,right,banner;
+    GUIStyle small,normal,title,right,banner,clock,count,centered,rightBig;
     bool stylesReady;
     readonly List<ArenaPilot> standings=new List<ArenaPilot>();
     float standingsRefresh;
@@ -16,6 +16,10 @@ public partial class AerialCombatPrototype
         title=new GUIStyle(normal){fontSize=28,fontStyle=FontStyle.Bold};
         right=new GUIStyle(small){alignment=TextAnchor.MiddleRight};
         banner=new GUIStyle(normal){fontSize=20,fontStyle=FontStyle.Bold,alignment=TextAnchor.MiddleCenter};
+        clock=new GUIStyle(banner){fontSize=34};
+        count=new GUIStyle(banner){fontSize=96};
+        centered=new GUIStyle(small){alignment=TextAnchor.MiddleCenter};
+        rightBig=new GUIStyle(normal){alignment=TextAnchor.MiddleRight};
         stylesReady=true;
     }
     // Chevron on a ring around the crosshair; the bearing is taken in camera space so it points where the eye looks.
@@ -44,6 +48,72 @@ public partial class AerialCombatPrototype
         GUI.color=new Color(1,.88f,.52f,fade);
         Text(new Rect(-172,-19,344,38),bannerText,banner);
         GUI.color=Color.white;GUI.matrix=old;
+    }
+    // Top-centre match clock. The final minute goes red and pulses on the second, so the pressure is visible and not only audible.
+    void MatchClock()
+    {
+        float remain=MatchRemaining;
+        bool urgent=phase==MatchPhase.Playing && remain<=60;
+        float pulse=urgent?Mathf.Clamp01(1-(remain-Mathf.Floor(remain))*3):0;
+        Box(new Rect(Width*.5f-96,16,192,56),new Color(.01f,.025f,.045f,.82f));
+        Line(new Vector2(Width*.5f-96,72),new Vector2(Width*.5f+96,72),urgent?new Color(1,.26f,.14f,.45f+pulse*.55f):new Color(.16f,.88f,1,.5f),2);
+        GUI.color=urgent?Color.Lerp(new Color(1,.3f,.18f),Color.white,pulse*.5f):Color.white;
+        Text(new Rect(Width*.5f-96,18,192,38),Mathf.FloorToInt(remain/60)+":"+Mathf.FloorToInt(remain%60).ToString("00"),clock);
+        GUI.color=new Color(.63f,.83f,.9f,.7f);
+        Text(new Rect(Width*.5f-96,52,192,16),phase==MatchPhase.Ended?"MATCH OVER":"REMAINING",centered);
+        GUI.color=Color.white;
+    }
+    void CountdownCard()
+    {
+        float left=CountdownLength-phaseTimer;
+        int n=Mathf.CeilToInt(left);
+        // Each numeral owns one second: it pops in at 1.5x, settles, and sheds an expanding ring on the way out.
+        float frac=1-Mathf.Clamp01(left-Mathf.Floor(left));
+        float scale=Mathf.Lerp(1.5f,1,1-Mathf.Pow(1-Mathf.Clamp01(frac*3.5f),3));
+        Color c=n>0?new Color(1,.88f,.52f):new Color(.16f,1,.85f);
+        Vector2 anchor=new Vector2(Width*.5f,Height*.5f-30);
+        Ring2D(anchor,86+frac*34,new Color(c.r,c.g,c.b,.3f*(1-frac)));
+        Matrix4x4 old=GUI.matrix;
+        GUI.matrix=old*Matrix4x4.TRS(new Vector3(anchor.x,anchor.y,0),Quaternion.identity,new Vector3(scale,scale,1));
+        GUI.color=c;Text(new Rect(-160,-70,320,140),n>0?n.ToString():"GO",count);GUI.color=Color.white;
+        GUI.matrix=old;
+        GUI.color=new Color(.63f,.83f,.9f,.75f);
+        Text(new Rect(Width*.5f-240,Height*.5f+72,480,22),"HOLD FOR LAUNCH   /   WEAPONS COLD",centered);
+        GUI.color=Color.white;
+    }
+    void ResultsPanel()
+    {
+        Box(new Rect(0,0,Width,Height),new Color(.01f,.02f,.05f,.72f));
+        Box(new Rect(340,92,600,516),new Color(.012f,.03f,.055f,.94f));
+        Line(new Vector2(340,93),new Vector2(940,93),new Color(1,.74f,.18f,.85f),3);
+        Text(new Rect(340,116,600,44),"MATCH COMPLETE",clock);
+        if(standings.Count>0)
+        {
+            GUI.color=new Color(1,.82f,.4f);
+            Text(new Rect(340,166,600,22),"WINNER   "+standings[0].callsign+"   /   "+standings[0].score+" BANKED",centered);
+        }
+        GUI.color=new Color(.63f,.83f,.9f,.6f);
+        Text(new Rect(372,206,240,20),"PILOT",small);
+        Text(new Rect(600,206,60,20),"KILLS",right);
+        Text(new Rect(690,206,60,20),"LOST",right);
+        Text(new Rect(790,206,118,20),"BANKED",right);
+        GUI.color=Color.white;
+        Line(new Vector2(372,230),new Vector2(908,230),new Color(.3f,.6f,.7f,.35f));
+        for(int i=0;i<standings.Count;i++)
+        {
+            var p=standings[i];float y=242+i*34;
+            if(p==player)Box(new Rect(356,y-3,568,30),new Color(.08f,.5f,.6f,.3f));
+            GUI.color=i==0?new Color(1,.82f,.4f):Color.white;
+            Text(new Rect(372,y,240,24),(i+1)+".   "+p.callsign,normal);
+            Text(new Rect(600,y+1,60,22),p.kills.ToString(),right);
+            Text(new Rect(690,y+1,60,22),p.deaths.ToString(),right);
+            Text(new Rect(790,y,118,24),p.score.ToString(),rightBig);
+            GUI.color=Color.white;
+        }
+        Line(new Vector2(372,528),new Vector2(908,528),new Color(.3f,.6f,.7f,.35f));
+        GUI.color=new Color(.9f,.96f,1,.55f+.45f*Mathf.Sin(Time.unscaledTime*3.4f));
+        Text(new Rect(340,552,600,26),"PRESS  ENTER  TO  RESTART",banner);
+        GUI.color=Color.white;
     }
     void Box(Rect r,Color c){GUI.color=c;GUI.DrawTexture(r,Texture2D.whiteTexture);GUI.color=Color.white;}
     void Text(Rect r,string s,GUIStyle style){GUI.Label(r,s,style);}
@@ -91,6 +161,7 @@ public partial class AerialCombatPrototype
         Box(new Rect(20,20,245,68),new Color(.01f,.025f,.045f,.8f));
         Text(new Rect(34,24,220,36),"R I F T",title);
         Text(new Rect(35,60,220,23),player.Altitude>550?"SUBORBITAL COAST":"ATMOSPHERIC FLIGHT",small);
+        MatchClock();
 
         if(Time.unscaledTime>standingsRefresh || standings.Count==0)
         {
@@ -118,7 +189,18 @@ public partial class AerialCombatPrototype
         Text(new Rect(353,Height-96,140,26),"HULL "+Mathf.CeilToInt(player.health),normal);
         Box(new Rect(355,Height-55,110,5),new Color(.25f,.14f,.1f));
         Box(new Rect(355,Height-55,110*player.health/100,5),orange);
+        // A full hold is a flight-model penalty, so the readout has to warn before the handling does.
+        bool heavy=player.cargo>=60;
+        GUI.color=heavy?goldColor:Color.white;
         Text(new Rect(495,Height-96,180,26),"CARGO "+player.cargo,normal);
+        GUI.color=Color.white;
+        if(heavy)
+        {
+            float pulse=.5f+.5f*Mathf.Sin(Time.unscaledTime*6);
+            Box(new Rect(592,Height-93,62,20),new Color(1,.74f,.18f,.14f+pulse*.16f));
+            GUI.color=new Color(1,.84f,.35f,.6f+pulse*.4f);
+            Text(new Rect(598,Height-94,60,20),"HEAVY",small);GUI.color=Color.white;
+        }
         Text(new Rect(495,Height-64,180,24),"BANKED "+player.score,small);
         Text(new Rect(681,Height-96,190,26),player.seekerCooldown>0?"SEEKER "+player.seekerCooldown.ToString("0.0")+"s":"SEEKER READY",small);
         Box(new Rect(685,Height-55,175,5),new Color(.2f,.25f,.3f));
@@ -180,6 +262,8 @@ public partial class AerialCombatPrototype
         }
         if(elapsed<18 || paused)
             Text(new Rect(30,110,975,30),"Mouse: pitch / bank   C: center   WASD: pitch / bank   QE: rudder   Shift / Ctrl: throttle   Space: boost   LMB: cannon   RMB: seeker",small);
+        if(phase==MatchPhase.Countdown)CountdownCard();
+        else if(phase==MatchPhase.Ended)ResultsPanel();
         if(paused)Text(new Rect(500,340,320,44),"PAUSED  /  ESC",title);
     }
 }
