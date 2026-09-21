@@ -26,7 +26,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     // Onboarding: one objective line that walks a new pilot through the loop once (shoot, scoop, ring, hold), then
     // never again on this machine. Advanced on the match clock from the flags the game already raises.
     public int tutorialStep; public float tutorialPop; public bool playerHitWreck, playerBanked;
-    public static readonly string[] Objectives={"SHOOT A REACTOR ON A WRECK","FLY INTO THE SALVAGE IT SPILLS","TAKE IT TO A REFINERY RING","HOLD INSIDE THE RING","LOOP CLOSED   /   NOW GO HUNTING"};
+    public static readonly string[] Objectives={"SHOOT A WRECK'S REACTOR","FLY INTO THE SPILLED SALVAGE","CARRY IT TO A REFINERY RING","HOLD INSIDE THE RING","LOOP CLOSED   /   NOW GO HUNTING"};
     // Results-screen awards, computed once when the match ends.
     public readonly List<string> awards=new List<string>();
     // Standalone player only: -rift-screenshot=<png> captures the full frame with the HUD 4.5 s in, then quits a second later.

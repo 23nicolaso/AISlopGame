@@ -382,11 +382,12 @@ public partial class AerialCombatPrototype
         float scale=tutorialStep>=4?1:Mathf.Lerp(1.25f,1,1-Mathf.Pow(1-Mathf.Clamp01(t*3),3));
         float fade=tutorialStep>=4?Mathf.Clamp01(tutorialPop/.6f):1;
         Matrix4x4 old=GUI.matrix;
-        GUI.matrix=old*Matrix4x4.TRS(new Vector3(142,112,0),Quaternion.identity,new Vector3(scale,scale,1));
-        Box(new Rect(-122,-14,244,28),new Color(.01f,.025f,.045f,.8f*fade));
-        Line(new Vector2(-122,14),new Vector2(122,14),tutorialStep>=4?new Color(1,.74f,.18f,.8f*fade):new Color(.16f,.88f,1,.6f*fade),2);
+        // 340 wide: the first HUD capture from the built player showed the 244 px card wrapping its longest line.
+        GUI.matrix=old*Matrix4x4.TRS(new Vector3(190,112,0),Quaternion.identity,new Vector3(scale,scale,1));
+        Box(new Rect(-170,-14,340,28),new Color(.01f,.025f,.045f,.8f*fade));
+        Line(new Vector2(-170,14),new Vector2(170,14),tutorialStep>=4?new Color(1,.74f,.18f,.8f*fade):new Color(.16f,.88f,1,.6f*fade),2);
         GUI.color=tutorialStep>=4?new Color(1,.88f,.52f,fade):new Color(.63f,.83f,.9f,fade);
-        Text(new Rect(-118,-13,240,26),(tutorialStep>=4?"":"OBJECTIVE   ")+Objectives[Mathf.Clamp(tutorialStep,0,4)],small);
+        Text(new Rect(-166,-13,336,26),(tutorialStep>=4?"":"OBJECTIVE   ")+Objectives[Mathf.Clamp(tutorialStep,0,4)],small);
         GUI.color=Color.white;GUI.matrix=old;
     }
     void Box(Rect r,Color c){GUI.color=c;GUI.DrawTexture(r,Texture2D.whiteTexture);GUI.color=Color.white;}
@@ -504,7 +505,8 @@ public partial class AerialCombatPrototype
         // weapon-heat bar at the right end of the strip: a full bar here means the airframe is already burning.
         float temp=Mathf.Clamp01(player.hullHeat);bool burning=player.hullHeat>1;
         GUI.color=burning?new Color(1,.55f,.22f):new Color(1,1,1,.7f);
-        Text(new Rect(427,Height-92,66,22),"SKIN "+Mathf.RoundToInt(player.hullHeat*100)+"%",small);
+        // Under the HULL number, not beside it: the first built-player capture had "SKIN 0%" printed through "HULL 100".
+        Text(new Rect(355,Height-72,110,18),"SKIN "+Mathf.RoundToInt(player.hullHeat*100)+"%",small);
         GUI.color=Color.white;
         Box(new Rect(355,Height-45,110,3),new Color(.22f,.1f,.07f));
         Box(new Rect(355,Height-45,110*temp,3),burning?Color.Lerp(new Color(1,.45f,.12f),new Color(2.4f,1.6f,.9f),.5f+.5f*Mathf.Sin(Time.unscaledTime*9)):Color.Lerp(new Color(.8f,.34f,.1f),new Color(1.7f,.44f,.1f),temp));

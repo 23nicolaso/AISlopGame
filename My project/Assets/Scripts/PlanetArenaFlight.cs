@@ -16,6 +16,7 @@ public partial class ArenaPilot : MonoBehaviour
     // 1.2 s of continuous tracking. Long enough that a missile is a decision, short enough to land inside one firing pass.
     public const float LockTime=1.2f;
     public int autopilot=-1;
+    bool trailsDirty;
     float burnBank;
     // Decays on simulation dt, not wall clock, so rivals hearing gunfire stays deterministic under the verification harness.
     public float firedRecently;
@@ -52,6 +53,9 @@ public partial class ArenaPilot : MonoBehaviour
         var g=AerialCombatPrototype.I;if(!art || !g || g.paused)return;
         Vector3 position;Quaternion rotation;SampleRenderPose(out position,out rotation);
         art.SetPositionAndRotation(position,rotation);
+        // A TrailRenderer cleared in the same frame its object is created keeps a vertex at the world origin; the first
+        // built-player capture showed both exhaust trails drawn to (0,0,0). Clear again on the first rendered frame.
+        if(trailsDirty){foreach(var t in GetComponentsInChildren<TrailRenderer>())t.Clear();trailsDirty=false;}
         if(plumes==null)
         {
             var parts=art.GetComponentsInChildren<Transform>();int found=0;
@@ -76,7 +80,7 @@ public partial class ArenaPilot : MonoBehaviour
 
     public void ClearTrails()
     {
-        generation++;
+        generation++;trailsDirty=true;
         foreach(var t in GetComponentsInChildren<TrailRenderer>()) t.Clear();
     }
     void FixedUpdate()
