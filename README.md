@@ -27,6 +27,7 @@ Or skip the Editor: `"$UNITY" -batchmode -nographics -quit -projectPath "My proj
 | C | Recenter mouse |
 | Escape | Pause — comfort settings (shake scale, reduced flashing, reduced camera motion) live here |
 | Enter | Restart the match from the results screen |
+| ← / → on the results screen | Rival difficulty: ROOKIE / PILOT / ACE, remembered for the next match |
 
 Full rules, flight-model notes and the verification checklist are in [`PLAYTEST.md`](./PLAYTEST.md).
 

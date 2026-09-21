@@ -96,6 +96,10 @@ The scope at bottom right is the aircraft's own frame at 14 m per pixel: refiner
 
 Under the title block a single OBJECTIVE line walks a new pilot through the loop once: shoot a reactor, fly into what it spills, take it to a ring, hold inside the ring. Each step pops as it clears and a bank from any step ends it with LOOP CLOSED / NOW GO HUNTING. It never shows again on the same machine. The results screen closes every match with four awards under the standings — Top Gun, Big Deposit, Ironclad and Marksman — so a match that was lost on banked score can still have been won somewhere.
 
+## Rival difficulty
+
+The results screen has a picker under the restart prompt: ROOKIE, PILOT or ACE, changed with left and right, remembered, applied to the next match. It scales only what you feel — how straight the seven rivals shoot, how fast they notice you and how far away they commit. ROOKIE doubles their aim error and slows their reactions by half; ACE tightens both and lets them engage from further out. The personalities themselves do not change, so Moth.exe is still the hunter and SoupDragon is still the free first kill at every tier.
+
 ## The buzzer
 
 Cargo still in the hold when the clock hits zero is worth nothing. For the last thirty seconds the warning stack says BANK BEFORE THE BUZZER whenever you are carrying, and every rival with anything aboard breaks off for the nearest ring regardless of how much it usually waits for — so the final half minute is a race to the refineries, and the rings are crowded exactly when a contest costs the most.

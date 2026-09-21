@@ -108,7 +108,7 @@ public static class RiftBalanceRunner
     static void BeginMatch(AerialCombatPrototype g)
     {
         matchIndex++;
-        g.paused = false; g.RestartMatch();
+        g.paused = false; g.difficulty = 1; g.RestartMatch();
         // The stand-in for the player rotates through the seven personalities so no single style biases the field.
         int persona = 1 + matchIndex % 7; g.player.autopilot = persona;
         current = new MatchStats { index = matchIndex, standInPersona = persona, pilots = new PilotStats[g.pilots.Count] };

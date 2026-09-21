@@ -24,6 +24,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public int vendettaId=-1; public float vendettaTimer;
     public const float VendettaWindow=60; public const int VendettaFloor=20;
     public const int HeistBonus=15;
+    // 0 ROOKIE / 1 PILOT / 2 ACE, chosen on the results screen and remembered; scales every rival's aim, reaction and reach.
+    public int difficulty=1;
     //                                        YOU HUNT HORD VULT STDY AVNG ROOK ELIT   (odd sites are the 460 m fields)
     public static readonly int[] SpawnSites={0,  1,   0,   3,   2,   4,   2,   5};
     // Onboarding: one objective line that walks a new pilot through the loop once (shoot, scoop, ring, hold), then
@@ -105,6 +107,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
         Application.runInBackground=true;
         LoadComfort();
         tutorialStep=PlayerPrefs.GetInt("rift.loopClosed",0)>0?4:0;
+        difficulty=Mathf.Clamp(PlayerPrefs.GetInt("rift.difficulty",1),0,2);
         foreach(var arg in System.Environment.GetCommandLineArgs()){if(arg.StartsWith("-rift-screenshot="))screenshotPath=arg.Substring(17);if(arg.StartsWith("-rift-hide="))hideForCapture=arg.Substring(11);}
         foreach(var c in FindObjectsByType<Camera>()) c.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>()) a.enabled=false;
@@ -666,6 +669,12 @@ public partial class AerialCombatPrototype : MonoBehaviour
         }
         if(quitAt>0 && elapsed>quitAt)Application.Quit();
         if(k!=null && phase==MatchPhase.Ended && k.enterKey.wasPressedThisFrame) RestartMatch();
+        // Difficulty is only ever changed between matches, on the results screen: left/right or A/D, saved at once.
+        if(k!=null && phase==MatchPhase.Ended)
+        {
+            int step=(k.rightArrowKey.wasPressedThisFrame || k.dKey.wasPressedThisFrame?1:0)-(k.leftArrowKey.wasPressedThisFrame || k.aKey.wasPressedThisFrame?1:0);
+            if(step!=0){difficulty=Mathf.Clamp(difficulty+step,0,2);PlayerPrefs.SetInt("rift.difficulty",difficulty);PlayerPrefs.Save();}
+        }
         hitFlash=Mathf.Max(0,hitFlash-dt); damageFlash=Mathf.Max(0,damageFlash-dt);
         // Purely visual timers run on unscaled time so hit-stop does not stretch a banner or a hit wedge.
         float raw=Time.unscaledDeltaTime;

@@ -22,6 +22,16 @@ public struct ArenaPersonality
         new ArenaPersonality("ROOK",               450,    30,     3,  .85f,   .6f,     5),  // SoupDragon: the first kill the arena hands a new player
         new ArenaPersonality("ELIT",               700,    50,   .5f,  .35f,  1.6f,    11)}; // Last Comet: no weak axis
     public static ArenaPersonality For(int id) => table[Mathf.Clamp(id,0,table.Length-1)];
+    // Difficulty is a multiplier on the three axes a human feels: how straight rivals shoot, how fast they notice, how far
+    // they commit. ROOKIE doubles their aim error and slows their reactions by half; ACE tightens both and reaches further.
+    public static readonly string[] DifficultyNames={"ROOKIE","PILOT","ACE"};
+    public ArenaPersonality Scaled(int difficulty)
+    {
+        var s=this;
+        if(difficulty<=0){s.aimJitter*=2;s.reaction*=1.5f;s.aggression*=.7f;}
+        else if(difficulty>=2){s.aimJitter*=.6f;s.reaction*=.8f;s.aggression*=1.2f;}
+        return s;
+    }
 }
 
 public partial class ArenaPilot
@@ -32,7 +42,7 @@ public partial class ArenaPilot
     public Vector3 Navigation => navigation;
     public SalvageCore CoreTarget => coreTarget;
     public CaptureGate GateTarget => gateTarget;
-    public ArenaPersonality Profile => ArenaPersonality.For(autopilot>=0?autopilot:id);
+    public ArenaPersonality Profile => ArenaPersonality.For(autopilot>=0?autopilot:id).Scaled(AerialCombatPrototype.I?AerialCombatPrototype.I.difficulty:1);
     ArenaPilot aggressor, alertTarget;
     float retaliation, engagement, combatRest, breakTime, burstTime, burstRest, alertTimer, searchTimer;
     Vector3 breakDirection, searchDirection, lastKnownPosition;

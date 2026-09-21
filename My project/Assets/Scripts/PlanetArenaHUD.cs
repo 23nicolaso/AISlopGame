@@ -371,6 +371,9 @@ public partial class AerialCombatPrototype
         Line(new Vector2(372,622),new Vector2(908,622),new Color(.3f,.6f,.7f,.35f));
         GUI.color=new Color(.9f,.96f,1,.55f+.45f*Mathf.Sin(Time.unscaledTime*3.4f));
         Text(new Rect(340,634,600,26),"PRESS  ENTER  TO  RESTART",banner);
+        // Difficulty picker under the restart prompt: arrows on either side, the current tier in the tag colour.
+        GUI.color=new Color(.63f,.83f,.9f,.85f);
+        Text(new Rect(340,664,600,20),"◀   RIVALS:  "+ArenaPersonality.DifficultyNames[Mathf.Clamp(difficulty,0,2)]+"   ▶      (left / right, next match)",centered);
         GUI.color=Color.white;
     }
     // One line of onboarding under the title block: the current objective, a pop when it advances, gone for good once

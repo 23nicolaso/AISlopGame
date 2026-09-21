@@ -13,7 +13,7 @@ public static class RiftVerification
         bool wasPaused=g.paused;g.paused=false;
         // This harness calls Damage/Shoot/Collect/Tick directly, so it has to own the match phase for the duration.
         var oldPhase=g.phase;float oldPhaseTimer=g.phaseTimer;g.phase=MatchPhase.Playing;g.phaseTimer=0;
-        var p=g.player;int oldScore=p.score;
+        var p=g.player;int oldScore=p.score;int oldDifficulty=g.difficulty;g.difficulty=1;
         try
         {
             // Population is unchanged at 24 wrecks, but they are no longer evenly spread: three surface fields of five
@@ -303,7 +303,7 @@ public static class RiftVerification
             p.score=oldScore;g.aceId=-1;
             foreach(var pilot in g.pilots){pilot.streak=0;g.Spawn(pilot);}
             g.phase=oldPhase;g.phaseTimer=oldPhaseTimer;
-            g.paused=wasPaused;g.SnapCamera();
+            g.paused=wasPaused;g.difficulty=oldDifficulty;g.SnapCamera();
         }
     }
 
