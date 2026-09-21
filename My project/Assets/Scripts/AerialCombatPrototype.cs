@@ -24,6 +24,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public int vendettaId=-1; public float vendettaTimer;
     public const float VendettaWindow=60; public const int VendettaFloor=20;
     public const int HeistBonus=15;
+    //                                        YOU HUNT HORD VULT STDY AVNG ROOK ELIT   (odd sites are the 460 m fields)
+    public static readonly int[] SpawnSites={0,  1,   0,   3,   2,   4,   2,   5};
     // Onboarding: one objective line that walks a new pilot through the loop once (shoot, scoop, ring, hold), then
     // never again on this machine. Advanced on the match clock from the flags the game already raises.
     public int tutorialStep; public float tutorialPop; public bool playerHitWreck, playerBanked;
@@ -225,7 +227,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
 
     public void Spawn(ArenaPilot p,bool initial=false)
     {
-        int site=p.isPlayer?0:(p.id-1)%gates.Count;
+        // Home fields by temperament, not by id: the three low-orbit fields go to the hunters who can fly thin air
+        // (HUNT, VULT, ELIT); the hoarder, the steady banker, the rookie and the avenger start on the surface. Six
+        // balance matches had the pilot with zero banked score be a low-orbit ROOK or STDY almost every time.
+        int site=p.isPlayer?0:SpawnSites[p.id];
         float siteLat=new[]{18f,50,82,114,146,178}[site]-8,siteLon=site%2==0?0:32,siteAltitude=site%2==0?165:450;
         // Spawn on the same great-circle route as local resources, heading toward the nearest field.
         Vector3 pos=p.isPlayer?new Vector3(0,165,0):SurfacePoint(siteLat,siteLon,siteAltitude);

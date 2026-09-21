@@ -33,6 +33,7 @@ Nobody has hand-flown RIFT since the shared flight model landed, and manual veri
 | 14 | thrust allowed above 650 m when the nose is below the horizon (was cut outright past 800 m); run-in point times out after 12 s | 5–9 | 1–5 | 5–11 | 962 | bank sampler had laden pilots pointing at their ring with zero stick while coasting away — above the air the engine is the only control |
 | 15 | nothing chased above 560 m (rivals included); dive above 800 m capped at 37°; no power while sinking > 40 m/s up there | 4–10 | 3 | 8–13 | 977 | every round-14 launch began as a Search/Intercept after a contact already in vacuum; launches themselves unchanged (23), so the remaining altitude time is the descent, not the climb |
 | 17 | ring approach: attitude gain 22→14 inside 450 m, run-in armed at 520 m, released under 14° | 5–9, mean 7.2 | 0–1 | 6–10, mean 8.3 | 462 | pilots with no bank 7 → 2 of 48; banks per match flat; the kill drop is inside the spread between six-match sets (4–14) — kept for the shut-out metric |
+| 18 | home fields by temperament: the three 460 m fields go to HUNT / VULT / ELIT, the hoarder, banker, rookie and avenger start on the surface | **9–17, mean 13.0** | **0** | **12–18, mean 14.5** | 397 | six-vs-six against round 17: kills 7.2 → 13.0, banks 8.3 → 14.5, total banked 8.8k → 16.2k, no self-inflicted death in 1800 s of play; the pilots still shut out are now a HUNT and an AVNG who spent the match fighting |
 | 16 | residual (vacuum) drag .00004 → .00012 — six matches against a six-match baseline | **4–14, mean 10.3** (was 6.3) | **0–1** (was 0–4) | **7–10, mean 8.8** (was 7.8) | **464** (was 980) | launches 42 → 9 in six matches, ceiling deaths 11 → 0, time above 650 m 92 → 38 s per pilot; below 300 m the term is invisible next to the density drag, so nothing on the fields changed |
 
 ## What the traces taught
@@ -42,17 +43,16 @@ Nobody has hand-flown RIFT since the shared flight model landed, and manual veri
 - **A whole planet is too big for eight aircraft.** With 950 m of sight and a 640 m horizon at 170 m, six sites 55° apart never see each other. Clustering them 32° apart is what finally puts two aircraft in the same sky on purpose.
 - **Turn radius decides banking.** A 105 m ring cannot be flown from inside a 240 m (thick air) or 640 m (460 m field) turning circle; the AI now sets up a straight run-in.
 
-## Final run (round 16, six matches — `docs/balance/six-match-drag.json`; baseline six in `six-match.json`)
+## Final run (round 18, six matches — `docs/balance/six-match-spawns.json`)
 
 | Metric | Baseline (round 1) | Now | Target |
 |---|---|---|---|
-| Kills per match | 0–2 | 4–14, mean 10.3, in every minute | ≥ 15 |
-| First kill | 7 s – never | 5–6 s in every match | ≤ 45 s |
-| Self-inflicted deaths per match | 14–16 | 0–1 (2 of 64 deaths, both burns) | < 25 % — met |
-| Seconds a pilot holds a target | 351 / 24 pilot-matches | ~1300 / 24 | — |
-| AI cannon hit rate | 33 % of very few shots | 19 % | 10–30 % — met |
-| Cargo banks per match | 5–8 | 7–10, mean 8.8 (claims 7–18) | ≥ 16 |
-| Pilots with 0 banked | 6–8 of 8 | 1.2 of 8 | 0 |
-| Mean altitude | ~450 (then 1990 mid-series) | 464 | — |
+| Kills per match | 0–2 | 9–17, mean 13.0, in every minute | ≥ 15 — two of six matches |
+| First kill | 7 s – never | 5–6 s in every match | ≤ 45 s — met |
+| Self-inflicted deaths per match | 14–16 | 0 in six matches | < 25 % — met |
+| AI cannon hit rate | 33 % of very few shots | ~18 % | 10–30 % — met |
+| Cargo banks per match | 5–8 | 12–18, mean 14.5 | ≥ 16 — three of six matches |
+| Pilots with 0 banked | 6–8 of 8 | 0.5 of 8 (a hunter or the avenger, mid-fight) | 0 |
+| Mean altitude | ~450 (then 1990 mid-series) | 397 | — |
 
-Two targets are met, kills sit at two thirds of the target with the best matches exceeding it, and banking is the one loop still short by half. The pilot without a bank is nearly always a low-orbit spawn (ROOK or STDY), and that is the next lever. The harness is what makes the next round cheap: `scratchpad/balance.sh 6` is about twenty minutes.
+Four of six targets are met outright and the other two are met in half the matches. The single biggest step of the whole series was not a physics fix but a casting decision: which temperament starts where. Everything above was found by reading traces, not by reasoning about the constants; the harness (`scratchpad/balance.sh 6`, about twenty minutes) is what makes the next round cheap.
