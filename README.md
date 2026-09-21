@@ -69,8 +69,10 @@ A snake on the shell of a junk-choked planet, in the same project and the same z
 ```bash
 "$UNITY" -batchmode -nographics -projectPath "$PROJECT" -executeMethod OrbitHeadlessRunner.Run -logFile /tmp/orbit-verify.log   # 24 rule checks
 "$UNITY" -batchmode -nographics -quit -projectPath "$PROJECT" -executeMethod RiftBuild.OrbitMacOS -logFile /tmp/orbit-build.log  # Builds/ORBIT.app
-scripts/build-webgl.sh   # 24 checks -> RiftBuild.OrbitWebGL (edit-mode checks, Gzip + fallback, Itch template) -> scripts/check-webgl.mjs -> Builds/ORBIT-web/
+scripts/build-webgl.sh   # 24 checks -> RiftBuild.OrbitWebGL (edit-mode checks, Gzip + fallback, Itch template) -> scripts/check-webgl.mjs -> scripts/check-webgl-render.mjs -> Builds/ORBIT-web/
 ```
+
+The last step draws the bundle in headless Chrome and inspects the pixels (lit land on the start screen, frame not mostly black). It exists because the first bundle shipped to itch.io lost its main light and drew a flat navy planet with an invisible ship, and every earlier gate passed it.
 
 ### Publishing to itch.io
 

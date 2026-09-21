@@ -49,6 +49,15 @@ jobs:
           buildMethod: RiftBuild.OrbitWebGL
           versioning: None
       - run: node scripts/check-webgl.mjs Builds/ORBIT-web
+      - name: Render check in headless Chrome
+        run: node scripts/check-webgl-render.mjs Builds/ORBIT-web --keep "$RUNNER_TEMP/orbit-webgl-render.png"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: orbit-webgl-render-${{ github.sha }}
+          path: ${{ runner.temp }}/orbit-webgl-render.png
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: orbit-webgl-${{ github.sha }}

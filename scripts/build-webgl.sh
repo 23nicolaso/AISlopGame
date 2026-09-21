@@ -3,6 +3,7 @@
 #   1. the 24 deterministic rule checks (OrbitHeadlessRunner, play mode, exit 0 required)
 #   2. the WebGL player (RiftBuild.OrbitWebGL: edit-mode checks + build, prints BUILD_AND_TESTS_PASSED)
 #   3. the bundle validator (scripts/check-webgl.mjs: itch.io limits, relative URLs, responsive canvas)
+#   4. the render check (scripts/check-webgl-render.mjs: headless Chrome draws the start screen, pixels are inspected)
 # The Editor must be closed. Logs go to $RUNNER_TEMP or /tmp.
 set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,4 +32,8 @@ fi
 run_unity "WebGL build" "$build_log" -buildTarget WebGL -executeMethod RiftBuild.OrbitWebGL -quit
 grep -q BUILD_AND_TESTS_PASSED "$build_log"
 node "$repo_root/scripts/check-webgl.mjs" "$repo_root/Builds/ORBIT-web"
-echo "WebGL build and Unity checks passed"
+# 4. the bundle actually drawn in headless Chrome: lit land on the start screen, frame not mostly black. Node 20 needs the
+#    WebSocket flag; Node 22+ has it built in.
+ws_flag=""; node -e 'process.exit(typeof WebSocket==="function"?0:1)' 2>/dev/null || ws_flag="--experimental-websocket"
+node $ws_flag "$repo_root/scripts/check-webgl-render.mjs" "$repo_root/Builds/ORBIT-web" --keep "$log_dir/orbit-webgl-render.png"
+echo "WebGL build, Unity checks, package and render checks passed"
