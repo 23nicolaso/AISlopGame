@@ -199,10 +199,10 @@ public partial class ArenaPilot
             // the turn crossed 450 m and orbited the ring at 160-660 m for a whole match.
             Vector3 toGate=gateTarget.transform.position-transform.position;
             float gateAngle=Vector3.Angle(transform.forward,toGate);
-            if(runIn==Vector3.zero && toGate.magnitude<450 && gateAngle>35){runIn=transform.position+transform.forward*600;runInAge=0;}
+            if(runIn==Vector3.zero && toGate.magnitude<520 && gateAngle>35){runIn=transform.position+transform.forward*600;runInAge=0;}
             runInAge+=dt;
             // A missed run-in point must not become a destination of its own: twelve seconds, then re-plan from wherever we are.
-            if(runIn!=Vector3.zero && (runInAge>12 || Vector3.Distance(transform.position,runIn)<90 || (gateAngle<20 && toGate.magnitude>450)))runIn=Vector3.zero;
+            if(runIn!=Vector3.zero && (runInAge>12 || Vector3.Distance(transform.position,runIn)<90 || (gateAngle<14 && toGate.magnitude>450)))runIn=Vector3.zero;
             navigation=runIn!=Vector3.zero?runIn:gateTarget.transform.position;
         }
         else if(shardTarget)navigation=shardTarget.transform.position;
@@ -319,7 +319,9 @@ public partial class ArenaPilot
             if((!rivalTarget || AerialCombatPrototype.Altitude(navigation)>560) && zoom>Mathf.Max(0,ceilingAlt-Altitude)+40)pitchError=Mathf.Min(pitchError,-12);
         }
         // Degrees of error that already demand full deflection; a pull-up commits harder than a dogfight correction.
-        float gain=recover?12:22;
+        // Tighter tracking on the last 450 m into a ring: the bank sampler's closest approaches clustered at 105-165 m,
+        // just outside the 105 m capture sphere, which is what a 22 degree gain does with a 12 degree heading error.
+        float gain=recover?12:(gateTarget && !rivalTarget && runIn==Vector3.zero && distance<450?14:22);
         controls=new Vector3(Mathf.Clamp(pitchError/gain,-1,1),Mathf.Clamp(yawError/(gain*1.3f),-1,1),Mathf.Clamp(rollError/(gain*1.6f),-1,1));
         // Same outranking as tactic/navigation: an engaged or alerted pilot never throttles down to the lazy banking speed.
         // Full power in a pull-up only while still sinking; once the nose is above the horizon the speed is the danger.
