@@ -3,7 +3,7 @@ using UnityEngine;
 
 public partial class AerialCombatPrototype
 {
-    GUIStyle small,normal,title,right;
+    GUIStyle small,normal,title,right,banner;
     bool stylesReady;
     readonly List<ArenaPilot> standings=new List<ArenaPilot>();
     float standingsRefresh;
@@ -15,7 +15,35 @@ public partial class AerialCombatPrototype
         normal=new GUIStyle(small){fontSize=18};normal.normal.textColor=Color.white;
         title=new GUIStyle(normal){fontSize=28,fontStyle=FontStyle.Bold};
         right=new GUIStyle(small){alignment=TextAnchor.MiddleRight};
+        banner=new GUIStyle(normal){fontSize=20,fontStyle=FontStyle.Bold,alignment=TextAnchor.MiddleCenter};
         stylesReady=true;
+    }
+    // Chevron on a ring around the crosshair; the bearing is taken in camera space so it points where the eye looks.
+    void HitWedge(float bearing,float alpha)
+    {
+        Vector2 c=new Vector2(Width*.5f,Height*.5f);
+        Vector2 d=new Vector2(Mathf.Sin(bearing),-Mathf.Cos(bearing)),n=new Vector2(-d.y,d.x);
+        Color col=new Color(1,.17f,.09f,alpha);
+        Vector2 tip=c+d*172,left=c+d*130-n*36,rightEdge=c+d*130+n*36;
+        Line(left,tip,col,3);Line(tip,rightEdge,col,3);
+        Line(c+d*118-n*20,c+d*146,new Color(1,.3f,.16f,alpha*.5f),2);
+        Line(c+d*146,c+d*118+n*20,new Color(1,.3f,.16f,alpha*.5f),2);
+    }
+    void KillBanner()
+    {
+        if(bannerTimer<=0)return;
+        float t=Mathf.Clamp01(1-bannerTimer/1.5f);
+        // Ease-out overshoot: punches in at 1.3x and settles, then fades over the last third of a second.
+        float scale=Mathf.Lerp(1.3f,1,1-Mathf.Pow(1-Mathf.Clamp01(t*5),3));
+        float fade=Mathf.Clamp01(bannerTimer/.35f);
+        Vector2 anchor=new Vector2(1135,312);
+        Matrix4x4 old=GUI.matrix;
+        GUI.matrix=old*Matrix4x4.TRS(new Vector3(anchor.x,anchor.y,0),Quaternion.identity,new Vector3(scale,scale,1));
+        Box(new Rect(-172,-19,344,38),new Color(.02f,.03f,.06f,.55f*fade));
+        Line(new Vector2(-172,19),new Vector2(172,19),new Color(1,.74f,.18f,fade*.8f),2);
+        GUI.color=new Color(1,.88f,.52f,fade);
+        Text(new Rect(-172,-19,344,38),bannerText,banner);
+        GUI.color=Color.white;GUI.matrix=old;
     }
     void Box(Rect r,Color c){GUI.color=c;GUI.DrawTexture(r,Texture2D.whiteTexture);GUI.color=Color.white;}
     void Text(Rect r,string s,GUIStyle style){GUI.Label(r,s,style);}
@@ -79,6 +107,7 @@ public partial class AerialCombatPrototype
             Text(new Rect(1027,y,170,22),(i+1)+". "+p.callsign,small);
             Text(new Rect(1188,y,54,22),p.score.ToString(),right);GUI.color=Color.white;
         }
+        KillBanner();
 
         Box(new Rect(20,Height-108,885,88),new Color(.01f,.025f,.045f,.82f));
         Text(new Rect(36,Height-96,180,26),Mathf.RoundToInt(player.Speed*3.6f)+"  km/h",normal);
@@ -137,6 +166,11 @@ public partial class AerialCombatPrototype
             }
             if(player.Speed<45 && player.Altitude<500)Text(new Rect(530,Height-170,300,28),"STALL",normal);
             if(player.Altitude<40)Text(new Rect(530,Height-205,300,28),"PULL UP",normal);
+            if(lastAttackAge>0 && lastAttackDirection.sqrMagnitude>.01f)
+            {
+                Vector3 local=cam.transform.InverseTransformDirection(lastAttackDirection);
+                HitWedge(Mathf.Atan2(local.x,local.z),Mathf.Clamp01(lastAttackAge));
+            }
             if(damageFlash>0)Box(new Rect(0,0,Width,Height),new Color(1,.03f,.01f,damageFlash*.4f));
         }
         else

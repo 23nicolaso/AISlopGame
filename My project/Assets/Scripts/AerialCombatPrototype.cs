@@ -17,7 +17,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public Camera cam;
     public UniversalAdditionalCameraData camData;
     public bool paused;
-    public float elapsed, hitFlash, damageFlash, shake;
+    // shake is trauma: callers only ever add to it, decay is linear, and the camera uses its square.
+    public float elapsed, hitFlash, damageFlash, shake, hitStop, bannerTimer, lastAttackAge;
+    public string bannerText="";
+    public Vector3 lastAttackDirection;
     public Transform world;
     readonly List<Object> owned = new List<Object>();
     Material alloy, dark, teal, red, gold, white, violet;
@@ -132,13 +135,51 @@ public partial class AerialCombatPrototype : MonoBehaviour
         p.transform.rotation=Quaternion.LookRotation(Vector3.ProjectOnPlane(direction,Up(pos)).normalized,Up(pos));
         p.velocity=p.transform.forward*82; p.health=100; p.cargo=0; p.respawn=0; p.invulnerable=3;
         p.throttle=.72f; p.heat=0; p.fuel=1; p.ResetFlight(); p.art.gameObject.SetActive(true); p.ClearTrails();
-        if(p==player) { SnapCamera(); damageFlash=0; CenterStick(); }
+        if(p==player) { SnapCamera(); damageFlash=0; lastAttackAge=0; CenterStick(); }
+    }
+
+    // Trauma accumulates instead of overwriting, so a burst of small hits still reads as one big jolt.
+    public void Trauma(float amount) { shake=Mathf.Min(1,shake+amount); }
+    public void Banner(string text) { bannerText=text; bannerTimer=1.5f; }
+
+    // Single dispatch point for the three feedback tiers: every event of the same weight gets the same layered package.
+    public void Feedback(string tier,Vector3 pos,ArenaPilot involved=null,AudioClip voice=null)
+    {
+        bool mine=involved && involved==player;
+        float proximity=player?1-Mathf.Clamp01(Vector3.Distance(pos,player.transform.position)/450):0;
+        if(tier=="large")
+        {
+            Burst(pos,28,3,true);
+            if(mine)
+            {
+                Trauma(.8f); hitFlash=Mathf.Max(hitFlash,.06f);
+                // Hit-stop is player-only: AI trading kills across the map must never stutter the frame.
+                hitStop=.08f; audioSource.PlayOneShot(voice?voice:boomSound,.7f);
+            }
+            else
+            {
+                Trauma(proximity*.35f);
+                if(proximity>0) audioSource.PlayOneShot(voice?voice:boomSound,proximity*.7f);
+            }
+        }
+        else if(tier=="medium")
+        {
+            // Sparks only spawn inside audible range; off-screen AI trades must not budget particles.
+            if(proximity>0) Burst(pos,7,1.2f,false);
+            if(mine) { Trauma(.35f); hitFlash=Mathf.Max(hitFlash,.16f); audioSource.PlayOneShot(voice?voice:hitSound,.35f); }
+            else if(proximity>0) audioSource.PlayOneShot(voice?voice:hitSound,proximity*.18f);
+        }
+        else
+        {
+            if(proximity>0) Burst(pos,4,.8f,false);
+            if(mine) { Trauma(.12f); hitFlash=Mathf.Max(hitFlash,.12f); audioSource.PlayOneShot(voice?voice:hitSound,.2f); }
+        }
     }
 
     public void Kill(ArenaPilot victim,ArenaPilot attacker)
     {
         if(!victim.Alive) return;
-        int cargo=victim.cargo; victim.cargo=0; victim.health=0; victim.respawn=3;
+        int spoils=victim.cargo,cargo=spoils; victim.cargo=0; victim.health=0; victim.respawn=3;
         victim.art.gameObject.SetActive(false); victim.deaths++;
         if(attacker && attacker!=victim) attacker.kills++;
         int pieces=Mathf.Min(16,Mathf.CeilToInt(cargo/8f));
@@ -147,9 +188,23 @@ public partial class AerialCombatPrototype : MonoBehaviour
             int value=cargo/(pieces-i); cargo-=value;
             SpawnShard(victim.transform.position+Random.insideUnitSphere*10,value);
         }
-        Burst(victim.transform.position,24,3,true);
-        if(Vector3.Distance(victim.transform.position,player.transform.position)<350) audioSource.PlayOneShot(boomSound,.7f);
-        if(victim==player) { shake=.8f; damageFlash=.5f; }
+        bool mine=victim==player || attacker==player;
+        Feedback("large",victim.transform.position,mine?player:null);
+        if(victim==player)
+        {
+            damageFlash=.5f;
+            if(attacker && attacker!=victim) { RecordIncoming(attacker.transform.position); Banner("SPLASHED BY  "+attacker.callsign); }
+            else Banner("TERRAIN IMPACT");
+        }
+        else if(attacker==player) Banner("SPLASHED  "+victim.callsign+"   +"+spoils+" SALVAGE");
+    }
+
+    // Remembered in the player's own frame so the HUD wedge stays correct while the ship keeps rolling.
+    public void RecordIncoming(Vector3 source)
+    {
+        Vector3 d=source-player.transform.position;
+        if(d.sqrMagnitude<.01f) return;
+        lastAttackDirection=d.normalized; lastAttackAge=1;
     }
 
     public void Damage(ArenaPilot p,float damage,ArenaPilot attacker)
@@ -158,8 +213,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
         if(attacker && attacker!=p){p.NotifyAttacked(attacker);attacker.hitsLanded++;}
         if(p.health<=damage) { Kill(p,attacker); return; }
         p.health-=damage;
-        if(p==player) { shake=.35f; damageFlash=.25f; }
-        if(attacker==player) { hitFlash=.16f; audioSource.PlayOneShot(hitSound,.2f); }
+        if(p==player) { damageFlash=.25f; if(attacker && attacker!=p) RecordIncoming(attacker.transform.position); }
+        Feedback("medium",p.transform.position,(p==player || attacker==player)?player:null);
     }
 
     public SalvageCore NearestCore(Vector3 position)
@@ -193,8 +248,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public void Collect(ArenaPilot p,SalvageShard s)
     {
         if(!p.Alive || !s || s.claimed) return;
+        Vector3 at=s.transform.position;
         s.claimed=true; p.cargo+=s.value; shards.Remove(s); Destroy(s.gameObject);
-        if(p==player) { hitFlash=.12f; audioSource.PlayOneShot(collectSound,.3f); }
+        Feedback("small",at,p,collectSound);
     }
 
     public Transform AimTarget(ArenaPilot p,float angle,out Vector3 targetVelocity)
@@ -246,7 +302,9 @@ public partial class AerialCombatPrototype : MonoBehaviour
         var bolt=g.AddComponent<ArenaBolt>(); bolt.owner=p; bolt.velocity=direction*(seeker?170:360)+p.velocity;
         bolt.target=target; bolt.seeker=seeker;
         var t=g.AddComponent<TrailRenderer>(); t.sharedMaterial=p.isPlayer?teal:red; t.time=seeker?.6f:.1f; t.startWidth=seeker?.35f:.18f; t.endWidth=0;
-        if(p==player){audioSource.PlayOneShot(gunSound,.4f); shake=Mathf.Max(shake,.05f);}
+        p.firedRecently=1.5f;
+        // Per-shot recoil trauma is small: at 8 shots/s it settles near .2 trauma, which squares down to a faint buzz.
+        if(p==player){audioSource.PlayOneShot(gunSound,.4f); Trauma(.03f);}
         else
         {
             float proximity=1-Mathf.Clamp01(Vector3.Distance(p.transform.position,player.transform.position)/450);
@@ -285,9 +343,15 @@ public partial class AerialCombatPrototype : MonoBehaviour
     {
         var k=Keyboard.current;
         if(k!=null && k.escapeKey.wasPressedThisFrame) { paused=!paused; Cursor.visible=paused; Cursor.lockState=paused?CursorLockMode.None:CursorLockMode.Confined; }
+        // Hit-stop and pause share the one time scale; pause always wins so a freeze frame can never unpause the world.
+        hitStop=Mathf.Max(0,hitStop-Time.unscaledDeltaTime);
+        Time.timeScale=paused?0:(hitStop>0?.05f:1);
         if(paused) { engineSource.volume=0; return; }
         float dt=Time.deltaTime; elapsed+=dt;
         hitFlash=Mathf.Max(0,hitFlash-dt); damageFlash=Mathf.Max(0,damageFlash-dt);
+        // Purely visual timers run on unscaled time so hit-stop does not stretch a banner or a hit wedge.
+        float raw=Time.unscaledDeltaTime;
+        bannerTimer=Mathf.Max(0,bannerTimer-raw); lastAttackAge=Mathf.Max(0,lastAttackAge-raw);
         if(k!=null && player.Alive && Application.isFocused)
         {
             player.throttle=Mathf.Clamp01(player.throttle+((k.leftShiftKey.isPressed?1:0)-(k.leftCtrlKey.isPressed?1:0))*dt*.35f);
@@ -332,11 +396,13 @@ public partial class AerialCombatPrototype : MonoBehaviour
     public void UpdateChaseCamera(float dt,Vector3 position,Quaternion rotation)
     {
         if(!player || !cam || paused || dt<=0)return;
-        shake=Mathf.MoveTowards(shake,0,dt*2);
+        shake=Mathf.Max(0,shake-dt*1.3f);
         // One continuous quaternion frame for the entire rig: no conflicting LookRotation up vector.
         cameraRotation=Quaternion.Slerp(cameraRotation,rotation,1-Mathf.Exp(-8*dt));
         cameraDistance=Mathf.Lerp(cameraDistance,player.boost?24:20,1-Mathf.Exp(-5*dt));
-        Vector3 noise=new Vector3(Mathf.PerlinNoise(Time.unscaledTime*19,0)-.5f,Mathf.PerlinNoise(0,Time.unscaledTime*17)-.5f,0)*shake;
+        // Squaring trauma keeps chip damage almost still while a kill genuinely kicks the rig.
+        float kick=shake*shake*2.6f;
+        Vector3 noise=new Vector3(Mathf.PerlinNoise(Time.unscaledTime*19,0)-.5f,Mathf.PerlinNoise(0,Time.unscaledTime*17)-.5f,Mathf.PerlinNoise(Time.unscaledTime*13,7)-.5f)*kick;
         cam.transform.position=position+cameraRotation*(new Vector3(0,5,-cameraDistance)+noise);
         cam.transform.rotation=cameraRotation*Quaternion.Euler(2,0,0);
         cam.fieldOfView=Mathf.Lerp(cam.fieldOfView,player.boost?76:66,1-Mathf.Exp(-3*dt));
@@ -345,7 +411,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
     void OnDestroy()
     {
         if(I!=this) return;
-        I=null;
+        I=null; Time.timeScale=1;
         foreach(var a in owned) if(a) Destroy(a);
         Cursor.visible=true; Cursor.lockState=CursorLockMode.None;
     }

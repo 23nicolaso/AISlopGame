@@ -8,6 +8,9 @@ public partial class ArenaPilot : MonoBehaviour
     public Transform art;
     public Vector3 velocity, controls;
     public float health=100, throttle=.72f, heat, fuel=1, respawn, invulnerable, fireCooldown, seekerCooldown;
+    // Decays on simulation dt, not wall clock, so rivals hearing gunfire stays deterministic under the verification harness.
+    public float firedRecently;
+    public bool recovering;
     public float Speed => velocity.magnitude;
     public float Altitude => AerialCombatPrototype.Altitude(transform.position);
     public bool Alive => health>0;
@@ -42,7 +45,7 @@ public partial class ArenaPilot : MonoBehaviour
     public void ResetFlight()
     {
         angularVelocity=Vector3.zero;controls=Vector3.zero;boost=false;
-        fireCooldown=0;seekerCooldown=0;decision=0;
+        fireCooldown=0;seekerCooldown=0;decision=0;firedRecently=0;recovering=false;
         coreTarget=null;shardTarget=null;gateTarget=null;rivalTarget=null;
         ResetTactics();ResetRenderPose();
     }
@@ -73,6 +76,7 @@ public partial class ArenaPilot : MonoBehaviour
         fireCooldown=Mathf.Max(0,fireCooldown-dt);
         seekerCooldown=Mathf.Max(0,seekerCooldown-dt);
         heat=Mathf.Max(0,heat-dt*.22f);
+        firedRecently=Mathf.Max(0,firedRecently-dt);
         if(!isPlayer) Think(dt);
 
         Vector3 up=AerialCombatPrototype.Up(transform.position);
@@ -135,12 +139,11 @@ public class SalvageCore : MonoBehaviour
         if(!Available) return;
         var g=AerialCombatPrototype.I;
         health-=damage;
-        if(shooter==g.player) g.hitFlash=.16f;
-        g.Burst(transform.position,4,.8f,false);
+        g.Feedback("small",transform.position,shooter);
         if(health>0) return;
         cooldown=28; art.gameObject.SetActive(false);
         for(int i=0;i<7;i++) g.SpawnShard(transform.position+Random.insideUnitSphere*16,value);
-        g.Burst(transform.position,18,2,true);
+        g.Feedback("medium",transform.position,shooter);
     }
 }
 
