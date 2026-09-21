@@ -451,9 +451,9 @@ public partial class AerialCombatPrototype
             GUI.color=p.Alive?Color.white:new Color(.5f,.5f,.5f);
             Text(new Rect(1027,y,118,22),(i+1)+". "+p.callsign,small);
             // A four-letter disposition beside every callsign: by the second match the player knows who to hunt and who to avoid.
-            bool marked=p.id==aceId;
-            GUI.color=marked?new Color(1,.8f,.28f):p.Alive?new Color(.45f,.66f,.76f):new Color(.36f,.4f,.44f);
-            Text(new Rect(1139,y+2,46,20),marked?"ACE":ArenaPersonality.For(p.id).tag,tag);
+            bool marked=p.id==aceId,grudge=p.id==vendettaId;
+            GUI.color=grudge?new Color(1,.42f,.3f):marked?new Color(1,.8f,.28f):p.Alive?new Color(.45f,.66f,.76f):new Color(.36f,.4f,.44f);
+            Text(new Rect(1139,y+2,46,20),grudge?"VNDT":marked?"ACE":ArenaPersonality.For(p.id).tag,tag);
             GUI.color=p.Alive?Color.white:new Color(.5f,.5f,.5f);
             Text(new Rect(1188,y,54,22),p.score.ToString(),right);GUI.color=Color.white;
         }
@@ -534,6 +534,14 @@ public partial class AerialCombatPrototype
             bool visible;Vector2 v=Project(p.transform.position,out visible);if(!visible)continue;
             Line(v+new Vector2(-10,-8),v+new Vector2(-10,8),new Color(orange.r,orange.g,orange.b,.5f));
             Line(v+new Vector2(10,-8),v+new Vector2(10,8),new Color(orange.r,orange.g,orange.b,.5f));
+            // The vendetta mark is the one rival the player is allowed to want: a red ring that breathes, and a countdown.
+            if(p.id==vendettaId)
+            {
+                float pulse=.5f+.5f*Mathf.Sin(Time.unscaledTime*5);
+                Ring2D(v,19+pulse*4,new Color(1,.3f,.2f,.5f+pulse*.5f));
+                GUI.color=new Color(1,.55f,.4f,.9f);
+                Text(new Rect(v.x+14,v.y+8,150,18),"VENDETTA  "+Mathf.CeilToInt(vendettaTimer)+"s",small);
+            }
             GUI.color=new Color(1,1,1,.6f);
             Text(new Rect(v.x+14,v.y-10,150,20),p.callsign,small);
             GUI.color=Color.white;

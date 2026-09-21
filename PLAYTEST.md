@@ -88,6 +88,10 @@ Pause with Escape and a COMFORT panel appears under the PAUSED text. Three rows,
 - **REDUCE FLASHING** — turns the full-screen damage flash into a constant dim tint and takes the pulse out of the warning text and the overheat bar.
 - **REDUCE CAMERA MOTION** — removes the roll component of impact shake and the field-of-view widening on boost, which are the two things most likely to cause motion discomfort.
 
+## Vendetta
+
+Whoever shoots you down is marked for sixty seconds: their rankings tag turns red and reads VNDT, a red ring breathes around their aircraft with the seconds left under it, and the feed says VENDETTA and their callsign. Take them down inside the window and whatever they were carrying is paid a second time straight into your banked score, twenty at the least, with a VENDETTA SETTLED line. Somebody else getting there first, or the clock running out, quietly clears it. It is one grudge at a time and it is the only rival the HUD ever tells you to want, so redeploying always comes with a target already chosen.
+
 ## Balance runs
 
 Because nobody had flown the shared flight model by hand, the game plays itself: `RiftBalanceRunner` hands the player's airframe to a rotating rival personality and steps whole 300 s matches at a fixed 0.02 s, logging every death, every launch out of the atmosphere and every banking approach. Twelve rounds of that are written up in `docs/BALANCE-REPORT.md`. The headline changes it forced: the six salvage fields now sit 32 degrees apart along one arc instead of around the whole planet, wrecks take 70 s to regenerate so a field runs dry and its pilots move on, rivals obey an energy rule in thin air (no climb that would coast past the target's altitude), fly a straight run-in at a ring instead of orbiting it, and the cannon does 18 a round.

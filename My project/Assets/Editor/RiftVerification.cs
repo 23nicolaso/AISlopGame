@@ -37,8 +37,13 @@ public static class RiftVerification
             Check(g.shards.Count>shards,"Death creates salvage");
             p.Simulate(3.1f);
             Check(p.Alive && p.cargo==0 && p.invulnerable>0,"Automatic player respawn");
-            var bot=g.pilots[1];g.Kill(bot,p);bot.Simulate(3.1f);
+            // That kill also marked Moth.exe for a vendetta; taking it back empty-handed pays the floor, then the score is
+            // reset so the banking arithmetic further down keeps its original expectations.
+            var bot=g.pilots[1];Check(g.vendettaId==bot.id,"Being shot down marks the killer");
+            g.Kill(bot,p);bot.Simulate(3.1f);
             Check(bot.Alive,"Automatic bot respawn");
+            Check(p.score==123+AerialCombatPrototype.VendettaFloor && g.vendettaId==-1,"Settling an empty-handed vendetta pays the floor");
+            p.score=123;
 
             g.SpawnShard(p.transform.position,9);
             var shard=g.shards[g.shards.Count-1];g.Collect(p,shard);g.Collect(p,shard);

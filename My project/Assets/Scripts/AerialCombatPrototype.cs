@@ -19,6 +19,10 @@ public partial class AerialCombatPrototype : MonoBehaviour
     // Whoever is on a three-kill run. The whole field weights its target scoring toward this id, so the leader
     // gets hunted without any explicit difficulty dial, and a trailing pilot gets a way back in by taking the mark.
     public int aceId=-1;
+    // Vendetta: whoever last shot the player down is marked for VendettaWindow seconds; taking them back inside the
+    // window banks their spilled cargo again as a flat bonus (at least VendettaFloor). One personal fight per death.
+    public int vendettaId=-1; public float vendettaTimer;
+    public const float VendettaWindow=60; public const int VendettaFloor=20;
     public const int AceStreak=3;
     public Camera cam;
     public UniversalAdditionalCameraData camData;
@@ -295,6 +299,13 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // Every trade on the board earns a feed row; only the two the player is in get a colour.
         if(victim==player) Toast("KILLED BY  "+(attacker && attacker!=victim?attacker.callsign.ToUpper():"THE PLANET"),new Color(1,.3f,.22f));
         else if(attacker==player) Toast("YOU  ✕  "+victim.callsign.ToUpper(),new Color(.16f,1,.85f));
+        // The mark moves to the newest killer; settling it pays the spoils a second time straight into banked score.
+        if(victim==player && attacker && attacker!=victim){vendettaId=attacker.id;vendettaTimer=VendettaWindow;Toast("VENDETTA  "+attacker.callsign.ToUpper(),new Color(1,.42f,.3f));}
+        else if(victim.id==vendettaId)
+        {
+            if(attacker==player){int bonus=Mathf.Max(VendettaFloor,spoils);player.score+=bonus;bankPop=.18f;Toast("VENDETTA SETTLED  +"+bonus,new Color(1,.6f,.3f));}
+            vendettaId=-1;vendettaTimer=0;
+        }
         else if(attacker && attacker!=victim) Toast(attacker.callsign.ToUpper()+"  ✕  "+victim.callsign.ToUpper(),new Color(.72f,.84f,.92f));
         else Toast(victim.callsign.ToUpper()+"  DOWN",new Color(.72f,.84f,.92f));
         if(attacker && attacker!=victim)

@@ -22,6 +22,8 @@ public partial class AerialCombatPrototype
     public void MatchTick(float dt)
     {
         phaseTimer+=dt;
+        // A grudge has a shelf life: sixty seconds, on the match clock, then the mark simply lapses without a word.
+        if(vendettaTimer>0){vendettaTimer=Mathf.Max(0,vendettaTimer-dt);if(vendettaTimer<=0)vendettaId=-1;}
         if(phase==MatchPhase.Countdown)
         {
             // One pip per numeral, each a step higher than the last, then a fifth above the lot of them on GO. The stored
@@ -91,7 +93,7 @@ public partial class AerialCombatPrototype
         foreach(var core in cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}
         elapsed=0;bannerTimer=0;damageFlash=0;lastAttackAge=0;shake=0;aceId=-1;bountyFresh=0;
         // The information layer is board state too: a restart that kept last match's feed would open on somebody else's kills.
-        toasts.Clear();cargoPop=0;bankPop=0;hitPop=0;hitGold=0;preciseTag=0;targetLock=0;hudTarget=null;
+        toasts.Clear();cargoPop=0;bankPop=0;hitPop=0;hitGold=0;preciseTag=0;targetLock=0;hudTarget=null;vendettaId=-1;vendettaTimer=0;
         missileRange=-1;missileBeep=0;overheated=false;lockBeep=0;
         phase=MatchPhase.Countdown;phaseTimer=0;overchargeTimer=0;heartbeatMark=-1;countdownMark=-1;
         // A queued chime from last match's final claim would land over the new countdown; the note queue is board state too.

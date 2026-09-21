@@ -28,7 +28,8 @@ Nobody has hand-flown RIFT since the shared flight model landed, and manual veri
 | 9 | ring run-in (stateless), cannon 14→18 | 2–4 | 0–2 | 4–6 | 952 | run-in oscillated; 77 % of pilot-time in transit ("Salvage") |
 | 10 | run-in latched, sites clustered into a 160° arc (32° apart) | 4–5 | 2–3 | 3–4 | 1185 | first kill ≤ 6 s in every match; laden pilots now zig-zag between two equidistant rings; the astern pitch clamp broke the retaliation check |
 | 11 | astern pitch clamp removed (bank-and-pull reversal restored) | 2–5 | 1–3 | 4–6 | 1275 | retaliation check green again; projectile check red: the energy rule pushed the nose down on a climbing gun pass |
-| 12 | ring latched once chosen; energy rule suspended while intercepting; overcharge check re-staged for the new layout | see final run | | | | |
+| 12 | ring latched once chosen; energy rule suspended while intercepting; overcharge check re-staged for the new layout | 1–3 | 1–2 | 2–9 | 1454 | both suites green again; DustRunner (low-orbit spawn) banked 0 in every match |
+| 13 | pitch 44→58 and yaw 27→34 deg/s at full authority; throttle .5 inside 300 m of a wreck | 4–7 | 1–3 | 2–3 | 1021 | a replay showed a 250 m turning circle against a 100 m field; kills now land in every minute of the match |
 
 ## What the traces taught
 
@@ -37,6 +38,17 @@ Nobody has hand-flown RIFT since the shared flight model landed, and manual veri
 - **A whole planet is too big for eight aircraft.** With 950 m of sight and a 640 m horizon at 170 m, six sites 55° apart never see each other. Clustering them 32° apart is what finally puts two aircraft in the same sky on purpose.
 - **Turn radius decides banking.** A 105 m ring cannot be flown from inside a 240 m (thick air) or 640 m (460 m field) turning circle; the AI now sets up a straight run-in.
 
-## Final run
+## Final run (round 13, three matches)
 
-_Filled in from the last `RiftBalanceRunner` pass on this commit — see the table below and `docs/balance/latest.json`._
+| Metric | Baseline | Now | Target |
+|---|---|---|---|
+| Kills per match | 0–2 | 4–7 (16 in 3 matches, spread over all five minutes) | ≥ 15 |
+| First kill | 7 s – never | 6 s in every match | ≤ 45 s |
+| Self-inflicted deaths per match | 14–16 | 1–3 (all ceiling exits, no terrain) | < 25 % of deaths — met (5 of 21) |
+| Seconds a pilot holds a target | 351 / 24 pilot-matches | 1161 | — |
+| AI cannon hit rate | 33 % of very few shots | 17 % of 559 | 10–30 % |
+| Cargo banks per match | 5–8 | 2–3 (claims 6–10) | ≥ 16 |
+| Pilots with 0 banked | 6–8 of 8 | 3 of 8 | 0 |
+| Mean altitude | ~450 (then 1990 mid-series) | 1021 | — |
+
+Kills are still a third of the target and banking is the weakest loop: pilots claim rings far more than they deposit cargo, which says the wreck-to-ring leg is where matches stall (turn radius and thin-air handling on the low-orbit fields). Those are the next two levers, and both now have telemetry pointed at them. The harness is what makes the next round cheap: `scratchpad/balance.sh 3` is eleven minutes.

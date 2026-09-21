@@ -284,7 +284,20 @@ public static class RiftCombatVerification
             bot.health=100;bot.invulnerable=0;g.Kill(bot,g.pilots[5]);
             Check(g.aceId==-1 && bot.streak==0,"Killing the ace clears the bounty");
 
-            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; precision 1.75x band; boost halves seeker turn rate; auto-level on a released stick and its off switch; coordinated mouse rudder versus uncoupled keyboard bank; heat-widened cannon spread and a cold bore; seeker lock timing and cone drop-out; safe redeploy spacing; crash versus shot-down debris; ace bounty crowning and clearing. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1")+", graze damage="+grazeDamage.ToString("F2")+" vs wide="+wideDamage.ToString("F2")+", seeker turn cold="+coldTurn.ToString("F2")+" deg vs burner="+burnerTurn.ToString("F2")+" deg, bank after 3 s assisted="+assisted.ToString("F1")+" deg vs unassisted="+unassisted.ToString("F1")+" deg, spread hot="+hotSpread.ToString("F2")+" deg vs cold="+coldSpread.ToString("F3")+" deg, lock="+lockReached.ToString("F2")+" s dropped in "+lockDropSteps+" step(s), redeploy gap="+redeployGap.ToString("F0")+" m, crash debris="+crashPieces+" vs shot-down="+hotPieces;
+            // Vendetta: the killer is marked, settling it inside the window pays max(20, spoils) straight to banked score,
+            // and an unsettled mark lapses on the match clock.
+            g.vendettaId=-1;g.vendettaTimer=0;p.health=100;p.invulnerable=0;bot.health=100;bot.invulnerable=0;
+            g.Kill(p,bot);
+            Check(g.vendettaId==bot.id && g.vendettaTimer>AerialCombatPrototype.VendettaWindow-.01f,"Being shot down marks the killer for a vendetta");
+            p.health=100;p.invulnerable=0;p.respawn=0;bot.cargo=30;int beforeVendetta=p.score;
+            g.Kill(bot,p);
+            Check(p.score==beforeVendetta+30 && g.vendettaId==-1,"Settling the vendetta pays the spoils again");
+            bot.health=100;bot.invulnerable=0;p.health=100;p.invulnerable=0;g.Kill(p,bot);
+            g.MatchTick(AerialCombatPrototype.VendettaWindow+.5f);
+            Check(g.vendettaId==-1 && g.vendettaTimer<=0,"An unsettled vendetta lapses after sixty seconds");
+            p.health=100;p.invulnerable=0;bot.health=100;bot.invulnerable=0;
+
+            return "FLIGHT / COMBAT PASS: camera flips at 30/60/144fps; combined flight rotations; empty-cargo engagement; blind-spot perception cone; delayed retaliation while loaded; actual projectile hits; protection/cooldown/occlusion; terrain recovery; armored cannon discount; volatile blast radius; precision 1.75x band; boost halves seeker turn rate; auto-level on a released stick and its off switch; coordinated mouse rudder versus uncoupled keyboard bank; heat-widened cannon spread and a cold bore; seeker lock timing and cone drop-out; safe redeploy spacing; crash versus shot-down debris; ace bounty crowning and clearing; vendetta mark, settlement and lapse. Max camera rate="+maxCameraRate.ToString("F1")+" deg/s, combat shots="+combatShots+", hits="+combatHits+", recovery min altitude="+minimum.ToString("F1")+", graze damage="+grazeDamage.ToString("F2")+" vs wide="+wideDamage.ToString("F2")+", seeker turn cold="+coldTurn.ToString("F2")+" deg vs burner="+burnerTurn.ToString("F2")+" deg, bank after 3 s assisted="+assisted.ToString("F1")+" deg vs unassisted="+unassisted.ToString("F1")+" deg, spread hot="+hotSpread.ToString("F2")+" deg vs cold="+coldSpread.ToString("F3")+" deg, lock="+lockReached.ToString("F2")+" s dropped in "+lockDropSteps+" step(s), redeploy gap="+redeployGap.ToString("F0")+" m, crash debris="+crashPieces+" vs shot-down="+hotPieces;
         }
         finally
         {
@@ -293,7 +306,7 @@ public static class RiftCombatVerification
             ClearDebris();
             foreach(var pilot in g.pilots){pilot.lockTarget=null;pilot.lockTimer=0;}
             ClearBolts();foreach(var pilot in g.pilots){pilot.streak=0;g.Spawn(pilot);}
-            g.aceId=-1;g.bountyFresh=0;
+            g.aceId=-1;g.bountyFresh=0;g.vendettaId=-1;g.vendettaTimer=0;
             foreach(var core in g.cores){core.cooldown=0;core.health=core.maxHealth;if(core.art)core.art.gameObject.SetActive(true);}
             for(int i=g.shards.Count-1;i>=0;i--)if(g.shards[i])UnityEngine.Object.DestroyImmediate(g.shards[i].gameObject);
             g.shards.Clear();
