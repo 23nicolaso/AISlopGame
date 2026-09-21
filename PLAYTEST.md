@@ -9,7 +9,7 @@ The arena builds automatically; no downloaded assets or start menu are required.
 - Fly through the large refinery rings and remain inside briefly to capture and bank your cargo. Cyan is neutral, teal is yours, orange is a rival's; red indicates a contested zone.
 - Banked salvage determines your leaderboard position. Seven named AI rivals gather, fight, bank, die, and respawn; their scores are earned in the simulation.
 - Death spills carried cargo, preserves banked score, and automatically redeploys you after three seconds — into one of three launch corridors, picked so that no living rival is within 300 m of where you come back. Being shot down throws a gold fireball and a breakup boom; flying into the ground or burning through on re-entry sheds pale cold hull plating with a low thud instead, so you can tell from across the arena which one happened.
-- Resources and rivals return indefinitely. Higher-altitude salvage is worth more.
+- Resources and rivals return indefinitely. **Higher-altitude salvage is worth far more**: the three low-orbit fields hold wrecks worth 24 apiece against the surface fields' 8, and everything picked up above the coast line is doubled again on collection. Getting it home is the problem — thin air, three wrecks instead of five, and no cover.
 
 ## Flight
 
@@ -45,6 +45,19 @@ Lift, drag, gravity, momentum, stall behavior, and thinner air affect flight. Th
 
 **The seeker is now locked, not launched.** Right mouse starts a lock on whatever rival sits in the 18° cone within 650 m; the ring around them tightens from 40 px to 14 px over 1.2 seconds while a pip climbs in your ears, then the box turns red, prints `LOCK`, and the bottom strip reads `LOCKED`. Press right mouse again to launch. The lock is not sticky: if the target leaves the cone, leaves 650 m, dies, or slips behind the planet, the whole 1.2 seconds is gone and you start over — which means hard-breaking out of someone's nose is a real defence, and so is holding boost once the missile is already in the air. Wrecks are the exception: they cannot evade, so a seeker fires at them instantly, which is still the cheapest way through an armoured belt.
 
+## Two kinds of refinery
+
+The six sites are no longer six copies of each other. Which band you are flying in is the main decision the map asks you to make, and you can tell them apart from the approach by their dock lighting.
+
+- **Surface fields** (refineries 1, 3, 5 — ring at 170 m, teal docks and gold approach chevrons). Five wrecks worth 8 each, sitting in air thick enough to turn hard in, with rock spires and masts to fly through. Refineries 1 and 5 also carry the only armoured wrecks in the arena, which is where a seeker earns its keep.
+- **Low-orbit fields** (refineries 2, 4, 6 — ring at 460 m, gold docks and teal chevrons). Three wrecks worth **24** each, above the coast line where every pickup already doubles — so one good pass up there is worth more than clearing a whole surface field. The price is the air: your controls go soft, the wings stop biting, and a full hold that heavy has to be flown all the way back down to a ring. Expect company, because the AI does the same arithmetic you do.
+
+## Sound
+
+The engine is two loops, not one. A low idle bed that is loudest with the throttle closed, and a rough burner layer that comes up with throttle and jumps again on boost — so you can hear how hard you are pushing without looking at the strip. Over the top of it sits the slipstream: broadband air noise that starts at 40 m/s, climbs with speed, and thins out with the atmosphere. When it goes silent you are in near-vacuum and your controls have gone with it, which is the same cue the wind streaks give your eyes.
+
+Events have melodies rather than beeps. Claiming a refinery is three rising notes; banking cargo is four, lower down, so you can tell a claim from a deposit without reading the feed. A rival doing either still chimes, at a third of the volume — the board changing is news, it just is not your news. The countdown ticks once a second and resolves a fifth higher on GO, and the match ends on a four-note sting under the results panel. All of it, plus the seeker pip and the missile warning, is generated in code at startup; there are no audio files in this project.
+
 ## Reading the arena
 
 The chase camera sits 14 m behind the aircraft (17 m on the burner) and the airframes are drawn 35% larger, so a rival at 60 m is a readable silhouette rather than a speck. Cannon tracers are thick enough to follow out to 100 m, and the engine plume stretches to two and a half times its length while the burner is lit — you can see a rival commit to a boost from directly astern.
@@ -53,7 +66,7 @@ The sky is a real gradient now, not a flat colour: a warm haze band along the ho
 
 Three things exist purely so you can tell where you are and how fast you are going:
 
-- **Refinery beacons.** Every capture ring fires a 400 m light pillar straight up along the local vertical, in the ring's current owner colour. It is visible from about 2 km, which is far enough to pick your next refinery before you can resolve the ring itself.
+- **Refinery beacons.** Every capture ring fires a 400 m light pillar straight up along the local vertical, in the ring's current owner colour, dissolving into the sky at the top rather than stopping at a flat cap. It is visible from about 2 km, which is far enough to pick your next refinery before you can resolve the ring itself — and from that range the dock lighting already tells you whether it is a surface field or a low-orbit one.
 - **Ground furniture.** Rock spires (up to 70 m) and relay masts with lit tips are scattered within 350 m of every refinery. They have no collision — you cannot hit them — but at low level they are the only thing that tells you 150 m/s from 80 m/s. Cloud banks sit between 40 m and 110 m and are kept at least 400 m clear of every ring, so weather never hides a fight.
 - **Wind streaks.** Above 40 m/s the air starts showing streaks past the canopy, doubling on the burner and fading out as the atmosphere thins. In near-vacuum they stop entirely, which is the cue that your controls have gone soft.
 
@@ -77,7 +90,7 @@ Pause with Escape and a COMFORT panel appears under the PAUSED text. Three rows,
 
 ## Verification
 
-While playing, use `Rift > Verify planetary arena` for deterministic checks of population, collection, banking, contest, cargo drops, score retention, player and rival respawning, pause behavior, swept hit detection, and neutral flight. The check resets pilot positions and changes temporary match state.
+While playing, use `Rift > Verify planetary arena` for deterministic checks of population, collection, banking, contest, cargo drops, score retention, player and rival respawning, pause behavior, swept hit detection, neutral flight, the per-band wreck values and counts, the engine layer cross-fade, and the wind bed's speed and vacuum gates. The check resets pilot positions and changes temporary match state.
 
 The atmosphere/suborbital screenshot menu entries stage and pause the camera; `Rift > Return to launch` resumes. Hand-taken screenshots live in `My project/Assets/Screenshots/`.
 

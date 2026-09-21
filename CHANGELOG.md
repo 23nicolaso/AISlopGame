@@ -53,10 +53,23 @@
 - `RiftVerification`：两项确定性校验——货物被最近的 pilot 吸引、进入拾取半径后自动 `Collect`。PASS 日志串加入 `shard attraction`。
 - **无人值守校验入口** `Assets/Editor/RiftHeadlessRunner.cs`（`dc4e172`）：`-batchmode -nographics -executeMethod RiftHeadlessRunner.Run`（不带 `-quit`）自动进入 Play Mode、依次跑两套 `Rift*Verification`，退出码 0 = 全过、1 = 有检查失败、2 = 90 s 内没进入 Play Mode（通常是编译错误）。
 - **无人值守截图入口** `Assets/Editor/RiftScreenshotRunner.cs`：`-batchmode -executeMethod RiftScreenshotRunner.Run`（不能带 `-nographics`）进入 Play Mode 后摆五个固定机位（发射点 / 亚轨道 / 精炼环 / 残骸场 / 交战），把追尾相机渲染进 1920×1080 RenderTexture 写成 PNG 到 `docs/screenshots/`（可用环境变量 `RIFT_SHOT_DIR` 覆盖）。每张图做平均亮度与对比度自检，纯黑或纯色帧直接判失败退出 1，所以它同时也是"渲染管线没坏"的回归测试。IMGUI HUD 不经过 `Camera.Render()`，截图里没有 HUD。
+- **音频分层**（`IMPROVEMENT-PLAN.md` WP-E 第 3 项）：新增 `Loop(name,length,hz,noise,noiseOnly)` —— `Sound()` 的循环版兄弟。三处差别都是为了接缝：包络改成平的（`Sound()` 的 `(1-t)²` 衰减循环起来必然"咔"一声）、频率吸附到缓冲区内的整周期数（`round(hz*length)/length`）所以正弦相位首尾连续、512 样本的交叉淡化**只**施加在噪声床上（正弦已经严丝合缝，再淡化只会给它梳状滤波）。另加一个 .28 权重的二次谐波，单纯正弦没有引擎该有的厚度。
+- **引擎两层交叉淡入**取代原来的单 clip 调 pitch：怠速层 55 Hz / 噪声 .15，加力层 140 Hz / 噪声 .3，音量分别是 `.06+.06*(1-throttle)` 与 `throttle*.09+(boost?.08:0)`。油门于是是**音色**变化而不只是音量变化，这是单 clip 调 pitch 永远做不到的。pitch 漂移钳在 ±.25（怠速层取其 .6），再多循环就开始像磁带被加速。
+- **风噪床**：一条纯噪声的循环 clip 挂在自己的 `windSource` 上，音量 `Clamp01((Speed-40)/140) * Density(相机高度) * .65`——和 `DriveWindStreaks` 同一道闸门，所以它和风线在同一瞬间消失于真空。密度取**相机**高度而非机体高度：风是听者耳朵里的东西。
+- **`public void TickAudio(float dt)`**：所有循环音量与音符队列的唯一写入点，由 `Update` 调用（`paused` 分支调 `TickAudio(0)`）。校验脚本据此用固定 dt 直接测混音，不必等帧。
+- **音符队列**：`public struct Note{clip,delay,pitch,volume}` + `public readonly List<Note> notes`，配 `Cue(clip,delay,pitch,volume)` 与 `Chord(clip,spacing,volume,params float[] pitches)`。旋律 = 一个 clip + 一组音高比，而不是四个 buffer。播放走 4 个轮转 `AudioSource`（`PlayOneShot` 的音高取自 source，单 source 播三连音会把已在空气里的音一起弯掉）。
+- **四个新事件音**：占领 chime（780 Hz，1 / 1.25 / 1.5，间隔 .09 s）挂在 `CaptureGate.Tick` 已有的 `Toast("REFINERY … CLAIMED")` 旁边；存分琶音（560 Hz 四音，间隔 .075 s）挂在存分分支；`phase` 进入 `Ended` 时一段四音结算号（间隔 .22 s）；倒计时 3/2/1 每秒一声逐级升高的 pip，进入 `Playing` 时一声高五度的 GO。AI 的占领/存分也响，但音量只有玩家的三分之一——地图变了要听得见，但不该被吼。
+- **站点差异化**（WP-E 第 1 项）：六个站点从"结构完全一致、只差 value 8/16"变成两种。**地表站**（偶数号，170 m）：5 个残骸、每个 8 分、空气厚实能缠斗，易爆仍在 c==2，装甲在 c==3 且 `s%4==0`（即 1 号与 5 号站）。**低轨站**（奇数号，460 m）：3 个残骸、每个 **24** 分、在"海岸线"以上所以拾取本来就双倍、空气稀薄机动性差，没有装甲残骸。残骸总数仍是 24（3×3+3×5），竞技场没变大，只是变得不对称——这才是重点。副作用是贪婪型 AI 会被 24 分拖上低轨（`FlyTactics` 的 `coreTarget` 只按距离选、但 `AimTarget` 与拾取收益按 `value` 走），这是**预期内**的：高价值空域自然变成冲突点。"Rival personalities" 的 `bankAt` 阈值一字未改。
 - 本文件。
 
 ### Changed
 
+- **月球从"金属蛋"改成自建网格 + 烘焙晨昏线**：原来是一个 820 m 的 `PrimitiveType.Sphere` 套 `alloy`（metallic .45 / smoothness .45），挂在 66° 视场的角落上被透视拉成一枚铬鸡蛋。现在 `BuildMoon(position,radius)` 自己生成 64×32 的经纬球（UV 映射因此是**已知函数**）与 256×256 的陨坑贴图（三层 `PerlinNoise` + 14 个暗盘），**并把太阳项直接烘进贴图**：`light=.55+.45*saturate(dot(n,sunDirection))`，材质用 `Universal Render Pipeline/Unlit`。半径 320（直径 640，原 820），位置改为发射航向左 15.4°、仰角 15°、距离 6.8 km——离轴 30° 而不是原来的 47°，球体横向拉伸从 47% 降到 15%。
+  - 为什么烘焙而不是用 Lit + emission：太阳在发射航向的**前方**，所以画面里任何位置的月球其可见半球必然是背光的（满月总在太阳对面，而太阳对面在你背后、不在画面里）。而 URP Lit 的自发光救不了它——**运行时 `material.EnableKeyword("_EMISSION")` 对 `shader_feature_local_fragment _EMISSION` 不生效**，`_EmissionColor` 开到 2.0 渲出来仍与不开像素级一致（已实测两轮截图验证）。烘焙之后晨昏线是真的，.55 的夜面底光就是地照。
+- **岩柱三分之一改用无光照暖砂岩**（`Material(new Color(.3,.255,.2),true)`）。根因：岩柱面向相机的那面法线是水平的，而 Trilight 环境光给水平法线的只有 `ambientEquatorColor`（.13,.19,.34，线性下约 .015–.093），所以**无论 albedo 给多高，背光的板子都是黑剪影**。改成 Unlit 常量色是唯一在不动全局环境光的前提下让地面有层次的办法；这些道具在 300 m 外只有 5–15 px 宽，本来也没有明暗可丢。剩下三分之二仍是原来的 `stone`，中继桅杆不变。
+- **精炼环光柱不再是平顶硬边**：`Rift/Additive` 新增 `_TopFade`（默认 0，星场与风线因此完全不受影响），按立方体物体空间的 `y+.5` 做 `smoothstep` 衰减，光柱在自己的长度上溶进天空。`_Fade` 从 .4 提到 .55 补偿顶部损失的亮度。原有"光柱跟随环的 `_BaseColor` 属性块"机制与对应校验项不变。
+- **云团压扁比例 .4r → .6r，颜色 (.78,.82,.88) → (.86,.9,.95)**：.4 的球从侧面看就是个飞碟，而追尾相机在云高度上永远是侧面。400 m 精炼环净空与对应校验项不变。
+- **低轨精炼环换一套坞灯**：低轨站的两道子午环与 12 个坞灯改成金色、进场雪佛龙改成青色，地表站保持原来的青坞灯 + 金雪佛龙。24 分的残骸场必须在进场前就能认出来，不能等 HUD 开口。
 - **RMB 从"直接发射导引弹"变成"起锁 / 再按发射"**，这是本次唯一的操作语义变更。例外：`AimTarget` 选中的若是残骸（`SalvageCore`），RMB 仍然即时发射——残骸不会机动，装甲带本来就是按导弹定价的，让玩家对着一块不动的铁皮数 1.2 秒只是收税。
 - `Shoot` 的 `preferredTarget` 分支里那道 8° 解算闸门，对 `seeker=true` 放宽成 `LockCone`（18°）：锁定是用 1.2 s 跟踪换来的，不能再被机炮的角度门挡回去。机炮走这条分支（AI 的全部开火）行为一字未变。
 - `Shoot` 的散布读的是开火**前**的枪温（新局部变量 `barrel`），而不是加完本发 `+.045` 之后的值——原顺序会让"冷枪"实际带着 .099° 的散布，冷枪精确性校验第一次跑就把它抓了出来。

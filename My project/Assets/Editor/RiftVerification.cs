@@ -16,7 +16,18 @@ public static class RiftVerification
         var p=g.player;int oldScore=p.score;
         try
         {
+            // Population is unchanged at 24 wrecks, but they are no longer evenly spread: three surface fields of five
+            // cheap wrecks and three low-orbit fields of three expensive ones, 3x3+3x5 = 24.
             Check(g.pilots.Count==8 && g.cores.Count==24 && g.gates.Count==6,"Arena population");
+            var perSite=new int[g.gates.Count];
+            foreach(var core in g.cores)
+            {
+                perSite[core.site]++;
+                Check(core.value==(core.site%2==1?24:8),"Wreck value follows its altitude band");
+            }
+            for(int s=0;s<perSite.Length;s++)
+                Check(perSite[s]==(s%2==1?3:5) && g.gates[s].lowOrbit==(s%2==1),"Site wreck counts and band flags differ by altitude");
+            Check(AerialCombatPrototype.Altitude(g.gates[1].transform.position)>400 && AerialCombatPrototype.Altitude(g.gates[0].transform.position)<300,"Low-orbit refineries sit above the surface ones");
             Check(AerialCombatPrototype.Density(700)<AerialCombatPrototype.Density(100)*.2f,"Thinning atmosphere");
             Check(Mathf.Abs(AerialCombatPrototype.Altitude(new Vector3(0,150,0))-150)<.01f,"Radial altitude");
             g.Spawn(p);p.invulnerable=0;p.cargo=53;p.score=123;
@@ -201,7 +212,31 @@ public static class RiftVerification
             g.UpdateChaseCamera(.02f,p.transform.position,p.transform.rotation);
             Check(lowRate>20 && g.windStreaks.emission.rateOverTime.constant<1,"Wind streaks scale with speed and air density");
 
-            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate, banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
+            // Audio layering. TickAudio is the single writer for every looping level, so the whole mix is measurable
+            // without waiting for a frame: cross-fade at both ends of the throttle, and the wind bed's altitude gate.
+            g.Spawn(p);p.invulnerable=0;
+            p.transform.position=new Vector3(0,150,0);p.velocity=p.transform.forward*150;g.SnapCamera();
+            p.throttle=0;p.boost=false;g.TickAudio(.02f);
+            float idleCold=g.idleSource.volume,burnerCold=g.burnerSource.volume;
+            p.throttle=1;p.boost=true;g.TickAudio(.02f);
+            Check(idleCold>burnerCold && g.burnerSource.volume>g.idleSource.volume,"Engine layers cross-fade with throttle and boost");
+            float lowWind=g.windSource.volume;
+            p.transform.position=new Vector3(0,5000,0);p.velocity=p.transform.forward*150;g.SnapCamera();
+            g.TickAudio(.02f);
+            Check(lowWind>.25f && g.windSource.volume<.001f,"Wind bed follows speed and dies in vacuum");
+            // A claim is a melody, queued beside the toast that was already there. Three notes for a claim, and the queue
+            // drains on TickAudio's dt like every other rate in the build.
+            var chimeGate=g.gates[4];
+            foreach(var other in g.pilots)if(other!=p)other.transform.position=chimeGate.transform.position+Vector3.right*4000;
+            g.Spawn(p);p.invulnerable=0;p.cargo=0;p.transform.position=chimeGate.transform.position;
+            chimeGate.owner=-1;chimeGate.claimant=-1;chimeGate.progress=0;chimeGate.ownerAge=0;chimeGate.overcharge=0;
+            g.notes.Clear();chimeGate.Tick(1.5f);
+            Check(g.notes.Count==3,"Claiming a refinery queues a three-note chime");
+            g.TickAudio(.5f);
+            Check(g.notes.Count==0,"The note queue drains on TickAudio");
+            chimeGate.owner=-1;chimeGate.claimant=-1;chimeGate.progress=0;chimeGate.ownerAge=0;p.cargo=0;
+
+            Debug.Log("ARENA VERIFICATION PASS: population, altitude/density, collection, shard attraction, physical capture, contest, cargo spill, score retention, player/bot respawn, pause, swept hit, stable flight, refinery income, ended gating, match restart, cargo weight, overcharge selection and reach exclusion, overcharge double bank, re-entry burn-through, combat dive immunity, suborbital salvage doubling, beacon pillar colour, surface scatter, cloud clusters clear of refineries, camera-locked sky dome, altitude star fade, wind streak speed/density gate, banked number pop, event feed cap and expiry, overheat cannon lockout and recovery, shake comfort scale, site value bands, per-site wreck counts, engine layer cross-fade, wind bed speed/vacuum gate, claim chime queue and drain. Neutral altitude="+lightAltitude.ToString("F1")+" laden altitude="+ladenAltitude.ToString("F1")+" laden speed="+ladenSpeed.ToString("F1")+" plain bank="+plainBank+" surge bank="+surgeBank+" plunge heat="+plungeHeat.ToString("F2")+" plunge hull="+plungeHealth.ToString("F0"));
         }
         finally
         {

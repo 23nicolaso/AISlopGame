@@ -80,6 +80,72 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         var clip=AudioClip.Create(name,count,1,22050,false); clip.SetData(samples,0); owned.Add(clip); return clip;
     }
 
+    // Sound()'s looping sibling. Three differences, all of them about the seam: a flat envelope instead of the (1-t)^2
+    // decay, a frequency snapped to a whole number of cycles inside the buffer so the tone wraps phase-continuous, and a
+    // 512-sample cross-fade applied to the noise bed alone (the tone already loops exactly, so fading it would only comb it).
+    // A second harmonic at .28 gives the engine layers a body a pure sine does not have; noiseOnly drops the tone for the wind.
+    AudioClip Loop(string name,float length,float hz,float noise,bool noiseOnly=false)
+    {
+        int count=(int)(22050*length);var samples=new float[count];var hiss=new float[count];var random=new System.Random(91);
+        for(int i=0;i<count;i++)hiss[i]=(float)random.NextDouble()*2-1;
+        int blend=Mathf.Min(512,count/4);
+        for(int i=0;i<blend;i++){float k=i/(float)blend;hiss[i]=Mathf.Lerp(hiss[count-blend+i],hiss[i],k);}
+        float tone=Mathf.Max(1,Mathf.Round(hz*length))/Mathf.Max(.0001f,length);
+        for(int i=0;i<count;i++)
+        {
+            float phase=i*tone*Mathf.PI*2/22050;
+            float body=noiseOnly?0:Mathf.Sin(phase)*.72f+Mathf.Sin(phase*2)*.28f;
+            samples[i]=(body*(1-noise)+hiss[i]*noise)*.5f;
+        }
+        var clip=AudioClip.Create(name,count,1,22050,false); clip.SetData(samples,0); owned.Add(clip); return clip;
+    }
+
+    // The moon, mesh and shading both generated. The old one was an alloy primitive at metallic .45 / smoothness .45,
+    // which at the edge of a 66 degree frame was a chrome egg. This one owns its own lat-long sphere so the texture's UV
+    // mapping is a known function, and the sun term is BAKED into that texture rather than left to a lit material: the
+    // moon is always on the far side of the sun from the launch heading, so a lit sphere there is a silhouette, and a
+    // URP Lit emission map cannot fix it (runtime EnableKeyword("_EMISSION") on a shader_feature_local does not take).
+    // Baking it means the terminator is real, the .55 night floor is earthshine, and the whole thing renders Unlit.
+    void BuildMoon(Vector3 position,float radius)
+    {
+        int columns=64,rows=32;
+        var vertices=new Vector3[(columns+1)*(rows+1)];var uv=new Vector2[vertices.Length];var indices=new List<int>();
+        for(int y=0;y<=rows;y++)for(int x=0;x<=columns;x++)
+        {
+            float lat=(float)y/rows*Mathf.PI,lon=(float)x/columns*Mathf.PI*2;
+            int i=y*(columns+1)+x;
+            vertices[i]=new Vector3(Mathf.Sin(lat)*Mathf.Cos(lon),Mathf.Cos(lat),Mathf.Sin(lat)*Mathf.Sin(lon))*radius;
+            uv[i]=new Vector2((float)x/columns,(float)y/rows);
+            if(x<columns && y<rows){int b=i+columns+1;indices.AddRange(new[]{i,i+1,b,i+1,b+1,b});}
+        }
+        var mesh=new Mesh{name="Moon",vertices=vertices,uv=uv,triangles=indices.ToArray()};mesh.RecalculateNormals();owned.Add(mesh);
+        var texture=new Texture2D(256,256);texture.wrapMode=TextureWrapMode.Repeat;
+        var rng=new System.Random(316);
+        // Fourteen basins in UV space, x/y/radius packed into a Vector3: enough to break the shading without looking pocked.
+        var craters=new Vector3[14];
+        for(int i=0;i<craters.Length;i++)craters[i]=new Vector3((float)rng.NextDouble()*256,(float)rng.NextDouble()*256,9+(float)rng.NextDouble()*28);
+        for(int y=0;y<256;y++)for(int x=0;x<256;x++)
+        {
+            float n=Mathf.PerlinNoise(x*.021f,y*.021f)*.6f+Mathf.PerlinNoise(x*.07f+13,y*.07f)*.3f+Mathf.PerlinNoise(x*.19f+41,y*.19f)*.1f;
+            float albedo=.62f+n*.22f;
+            foreach(var c in craters)
+            {
+                float d=Vector2.Distance(new Vector2(x,y),new Vector2(c.x,c.y));
+                if(d<c.z)albedo*=Mathf.Lerp(.66f,1,Mathf.SmoothStep(0,1,d/c.z));
+            }
+            // Same UV convention the mesh above writes, so this really is the surface normal under that texel.
+            float lat=y/255f*Mathf.PI,lon=x/255f*Mathf.PI*2;
+            Vector3 normal=new Vector3(Mathf.Sin(lat)*Mathf.Cos(lon),Mathf.Cos(lat),Mathf.Sin(lat)*Mathf.Sin(lon));
+            float light=.55f+.45f*Mathf.Clamp01(Vector3.Dot(normal,sunDirection));
+            texture.SetPixel(x,y,new Color(albedo*light*.98f,albedo*light,albedo*light*1.08f,1));
+        }
+        texture.Apply();owned.Add(texture);
+        var m=new Material(Shader.Find("Universal Render Pipeline/Unlit"));owned.Add(m);
+        m.SetTexture("_BaseMap",texture);m.mainTexture=texture;m.SetColor("_BaseColor",Color.white);m.color=Color.white;
+        var g=new GameObject("Moon");g.transform.SetParent(world);g.transform.position=position;
+        g.AddComponent<MeshFilter>().sharedMesh=mesh;g.AddComponent<MeshRenderer>().sharedMaterial=m;
+    }
+
     // `crash` swaps the fireball's gold for cold alloy and throws it slower and further: a hull coming apart on the rock
     // does not burn, it sheds, so the same 28-piece package reads as a different kind of death from across the field.
     public void Burst(Vector3 pos,int count,float size,bool explosion,bool crash=false)
@@ -104,30 +170,35 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
     {
         // A large physical torus and three meridians describe a fly-through capture volume.
         var t=gate.transform;
+        // The two altitude bands wear different dock lighting: gold for the low-orbit refineries, teal for the surface
+        // ones. A 24-point field has to be identifiable from the approach, before the HUD has anything to say about it.
+        Material accent=gate.lowOrbit?gold:teal;
         gate.ring=Ring(t,105,white,2.2f);
-        var cross=Ring(t,105,teal,.65f);cross.transform.localRotation=Quaternion.Euler(0,90,0);
-        var floor=Ring(t,105,teal,.65f);floor.transform.localRotation=Quaternion.Euler(90,0,0);
+        var cross=Ring(t,105,accent,.65f);cross.transform.localRotation=Quaternion.Euler(0,90,0);
+        var floor=Ring(t,105,accent,.65f);floor.transform.localRotation=Quaternion.Euler(90,0,0);
         gate.progressRing=Ring(t,88,white,3);gate.progressRing.loop=false;
         Ring(t,112,dark,5);
         // A 400 m beam standing off the top of the ring along the gate's radial up. It is the only thing that says
         // "a refinery is here" from 2 km out, and it wears the owner colour the ring already computes every tick.
         // Neutral cyan is the colour the first Tick would paint it anyway, so the beam is never white for a frame.
-        if(!pillarMaterial)pillarMaterial=Additive(new Color(.1f,.7f,1),.4f);
+        // _TopFade=1 dissolves the beam over its own length: a hard cap on a 400 m bar reads as a wall, not a light.
+        if(!pillarMaterial){pillarMaterial=Additive(new Color(.1f,.7f,1),.55f);pillarMaterial.SetFloat("_TopFade",1);}
         gate.pillar=Shape("Refinery beacon pillar",t,PrimitiveType.Cube,new Vector3(0,310,0),new Vector3(5,400,5),pillarMaterial).GetComponent<Renderer>();
         for(int i=0;i<12;i++)
         {
             float a=i*Mathf.PI*2/12;
             var p=Shape("Refinery ring segment",t,PrimitiveType.Cube,new Vector3(Mathf.Cos(a)*112,Mathf.Sin(a)*112,0),new Vector3(7,15,12),alloy);
             p.transform.localRotation=Quaternion.Euler(0,0,a*Mathf.Rad2Deg);
-            Shape("Dock beacon",t,PrimitiveType.Sphere,new Vector3(Mathf.Cos(a)*105,Mathf.Sin(a)*105,0),Vector3.one*4,teal);
+            Shape("Dock beacon",t,PrimitiveType.Sphere,new Vector3(Mathf.Cos(a)*105,Mathf.Sin(a)*105,0),Vector3.one*4,accent);
         }
-        // In-world directional chevrons point through the aperture.
+        // In-world directional chevrons point through the aperture, in whichever of the two colours the docks did not take.
+        Material guide=gate.lowOrbit?teal:gold;
         for(int i=0;i<4;i++)
         {
             Vector3 p=new Vector3(0,-78,-100+i*23);
-            var left=Shape("Approach chevron",t,PrimitiveType.Cube,p+Vector3.left*6,new Vector3(1,1,15),gold);
+            var left=Shape("Approach chevron",t,PrimitiveType.Cube,p+Vector3.left*6,new Vector3(1,1,15),guide);
             left.transform.localRotation=Quaternion.Euler(0,45,0);
-            var right=Shape("Approach chevron",t,PrimitiveType.Cube,p+Vector3.right*6,new Vector3(1,1,15),gold);
+            var right=Shape("Approach chevron",t,PrimitiveType.Cube,p+Vector3.right*6,new Vector3(1,1,15),guide);
             right.transform.localRotation=Quaternion.Euler(0,-45,0);
         }
     }
@@ -228,7 +299,12 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         // The starfield gets its own additive material so its brightness can be a function of altitude instead of a constant.
         starMaterial=Additive(new Color(.78f,.88f,1.1f),0);
         MeshPart(world,"Distant stars",Vector3.zero,Vector3.one,stars.ToArray(),triangles.ToArray(),starMaterial);
-        Shape("Moon",world,PrimitiveType.Sphere,new Vector3(-3500,1900,5500),Vector3.one*820,alloy);
+        // Placed off the launch camera axis rather than off the world axes. 15.4 degrees left of the launch heading at
+        // 15 degrees elevation lands it a quarter of the way in from the left edge and three quarters up: 30 degrees
+        // off-axis, where a 66 degree lens stretches a sphere by 15% instead of the 47% it did at the old corner. The
+        // same bearing puts it 45 degrees from the sun, so it is a gibbous body with a real terminator rather than a
+        // silhouette. 640 m at 6.8 km is 5.4 degrees wide, about a twelfth of the frame height.
+        BuildMoon(new Vector3(0,165,0)+new Vector3(-.2565f,.259f,.9314f)*6800,320);
 
         var skyShader=Shader.Find("Rift/Sky");
         if(skyShader)
@@ -249,7 +325,7 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         cloudRoot=new GameObject("Arena / weather").transform;cloudRoot.SetParent(world,false);
         var vapour=new Material(Shader.Find("Universal Render Pipeline/Lit"));owned.Add(vapour);
         // A cloud is a light trap, not a metal panel: no metallic, almost no smoothness, so it only ever shows the sun's side.
-        vapour.SetColor("_BaseColor",new Color(.78f,.82f,.88f));vapour.color=new Color(.78f,.82f,.88f);
+        vapour.SetColor("_BaseColor",new Color(.86f,.9f,.95f));vapour.color=new Color(.86f,.9f,.95f);
         vapour.SetFloat("_Metallic",0);vapour.SetFloat("_Smoothness",.06f);
         var rng=new System.Random(1607);int made=0;
         for(int attempt=0;attempt<400 && made<20;attempt++)
@@ -267,7 +343,9 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
             {
                 float radius=30+(float)rng.NextDouble()*40;
                 Vector3 offset=new Vector3((float)rng.NextDouble()*130-65,(float)rng.NextDouble()*18-9,(float)rng.NextDouble()*95-48);
-                Shape("Vapour",cluster,PrimitiveType.Sphere,offset,new Vector3(radius,radius*.4f,radius*.78f),vapour);
+                // .6 of the radius in the vertical, not .4: a .4 puff is a saucer seen edge-on from the side, which is
+                // exactly the angle a chase camera at cloud height always has.
+                Shape("Vapour",cluster,PrimitiveType.Sphere,offset,new Vector3(radius,radius*.6f,radius*.78f),vapour);
             }
         }
     }
@@ -282,6 +360,13 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
         // Bright enough that the ambient equator fill still colours the face turned away from a low sun instead of clipping to black.
         stone.SetColor("_BaseColor",new Color(.36f,.33f,.29f));stone.color=new Color(.36f,.33f,.29f);
         stone.SetFloat("_Metallic",0);stone.SetFloat("_Smoothness",.12f);
+        // Every third spire is warm sandstone instead of the cold basalt. A field of one material backlit by a low sun is
+        // a row of identical black slabs; two albedos an octave apart is all it takes for the ground to have texture.
+        // A spire's camera-facing wall is a horizontal normal, and under Trilight ambient a horizontal normal only ever
+        // gets the equator colour (.13,.19,.34) — which is why every backlit slab in the field renders as a black cutout
+        // no matter what albedo it carries. The sandstone third is therefore flat Unlit: a constant warm mid-tone that
+        // does not care which way the sun is, on props that are 5-15 px wide at 300 m and have no shading to lose.
+        var warm=Material(new Color(.3f,.255f,.2f),true);
         var rng=new System.Random(20260921);
         foreach(var gate in gates)
         {
@@ -304,7 +389,7 @@ AudioClip Sound(string name,float length,float start,float end,float noise)
                 else
                 {
                     float height=14+(float)rng.NextDouble()*56,width=5+(float)rng.NextDouble()*9;
-                    var rock=Shape("Basalt spire",scatterRoot,PrimitiveType.Cube,at+localUp*height*.5f,new Vector3(width,height,width*.75f),i%3==0?slate:stone);
+                    var rock=Shape("Basalt spire",scatterRoot,PrimitiveType.Cube,at+localUp*height*.5f,new Vector3(width,height,width*.75f),i%3==0?warm:stone);
                     rock.transform.rotation=stand*Quaternion.Euler((float)rng.NextDouble()*10-5,0,(float)rng.NextDouble()*10-5);
                 }
             }

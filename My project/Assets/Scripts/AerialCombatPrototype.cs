@@ -36,8 +36,15 @@ public partial class AerialCombatPrototype : MonoBehaviour
     Material alloy, dark, teal, red, gold, white, violet, slate, pillarMaterial;
     // Cold alloy shrapnel for a terrain kill, kept as its own instance so the debris variant is testable by reference.
     public Material crashDebris;
-    AudioSource audioSource, engineSource;
+    AudioSource audioSource;
+    // Two engine loops cross-faded by throttle/boost instead of one clip dragged around by pitch, plus the wind bed on
+    // its own source. Public because TickAudio's mix is a verified thing, and the harness reads these volumes directly.
+    public AudioSource idleSource, burnerSource, windSource;
+    // Four round-robin voices for the scheduled note queue: PlayOneShot takes its pitch from the source, so a three-note
+    // chime played through one source would bend the notes already in the air.
+    AudioSource[] noteVoices; int noteVoice;
     AudioClip gunSound, hitSound, boomSound, collectSound, missileTone, overheatHiss, crashThud, lockTone, lockConfirm;
+    AudioClip chimeNote, bankNote, countPip, stingNote;
     Quaternion cameraRotation;
     Vector3 sunDirection=Vector3.up;
     // 14 m instead of 20: the aircraft has to own a sixth of the frame width, or nothing in the world has a readable scale.
@@ -118,7 +125,6 @@ public partial class AerialCombatPrototype : MonoBehaviour
         camData.antialiasingQuality=AntialiasingQuality.High;
         cam.gameObject.AddComponent<AudioListener>();
         audioSource=cam.gameObject.AddComponent<AudioSource>(); audioSource.volume=.6f;
-        engineSource=cam.gameObject.AddComponent<AudioSource>(); engineSource.loop=true;
         gunSound=Sound("Cannon",.12f,460,80,.3f);
         hitSound=Sound("Armor impact",.16f,220,55,.35f);
         boomSound=Sound("Ship breakup",.7f,75,18,.6f);
@@ -131,7 +137,24 @@ public partial class AerialCombatPrototype : MonoBehaviour
         // The lock climbs (900->1500) and the confirmation sits on top of it, so the ear hears the acquisition finish.
         lockTone=Sound("Seeker lock climb",.09f,900,1500,.04f);
         lockConfirm=Sound("Seeker locked",.22f,1500,1900,.03f);
-        engineSource.clip=Sound("Engine",1,70,70,.12f); engineSource.volume=.08f; engineSource.Play();
+        // Melody stock. One clip per event, played back at rising pitches by the note queue, so a chime is a schedule
+        // rather than four more buffers: a claim is 780 Hz at 1 / 1.25 / 1.5, a deposit is the same idea an octave down.
+        chimeNote=Sound("Refinery chime",.24f,780,900,.02f);
+        bankNote=Sound("Deposit note",.2f,560,700,.02f);
+        countPip=Sound("Countdown pip",.14f,520,500,.02f);
+        stingNote=Sound("Results sting",.5f,300,430,.03f);
+        // 55 Hz of idle with a little grit, 140 Hz of burner with a lot of it: cross-faded, the throttle is audible as a
+        // change of character and not just of loudness, which one pitch-shifted clip can never do.
+        idleSource=cam.gameObject.AddComponent<AudioSource>(); idleSource.loop=true;
+        idleSource.clip=Loop("Engine idle",1,55,.15f); idleSource.volume=.06f; idleSource.Play();
+        burnerSource=cam.gameObject.AddComponent<AudioSource>(); burnerSource.loop=true;
+        burnerSource.clip=Loop("Engine burner",1,140,.3f); burnerSource.volume=0; burnerSource.Play();
+        // Broadband, no tone at all: the wind is the air itself, so it is gated on the same speed x density product the
+        // wind streaks are and disappears in vacuum at exactly the same moment they do.
+        windSource=cam.gameObject.AddComponent<AudioSource>(); windSource.loop=true;
+        windSource.clip=Loop("Slipstream",1.5f,0,1,true); windSource.volume=0; windSource.Play();
+        noteVoices=new AudioSource[4];
+        for(int i=0;i<noteVoices.Length;i++){noteVoices[i]=cam.gameObject.AddComponent<AudioSource>();noteVoices[i].playOnAwake=false;}
         BuildPlanet();
         BuildSites();
         // Weather and surface scatter need the refinery positions to keep clear of them, so they build after the sites.
@@ -155,22 +178,28 @@ public partial class AerialCombatPrototype : MonoBehaviour
     void BuildSites()
     {
         // First salvage field is directly ahead at launch; more sites encircle the planet.
+        // Two kinds of site, alternating. Surface fields (even index, 170 m) are wide and cheap: five wrecks at 8 a piece
+        // in thick air you can actually turn in. Low-orbit fields (odd index, 460 m) are the opposite trade — three
+        // wrecks at 24, above the coast line where pickups already double, in air too thin to fight well in. The totals
+        // stay at 24 wrecks, so the arena did not get bigger, it got lopsided, which is the whole point.
         float[] lat={18,62,115,173,235,295};
         for(int s=0;s<lat.Length;s++)
         {
-            float lon=s%2==0?0:32;
+            bool orbit=s%2==1; float lon=orbit?32:0; int wrecks=orbit?3:5;
             var gate=new GameObject("Capture refinery "+(s+1)).AddComponent<CaptureGate>(); gate.transform.SetParent(world);
-            gate.index=s; gate.transform.position=SurfacePoint(lat[s]+9,lon,170+(s%2)*290);
+            gate.index=s; gate.lowOrbit=orbit; gate.transform.position=SurfacePoint(lat[s]+9,lon,170+(orbit?290:0));
             gate.transform.rotation=Quaternion.LookRotation(Vector3.ProjectOnPlane(Vector3.forward,Up(gate.transform.position)).normalized,Up(gate.transform.position));
             BuildGate(gate); gates.Add(gate);
-            for(int c=0;c<4;c++)
+            for(int c=0;c<wrecks;c++)
             {
                 var core=new GameObject("Breakable salvage core").AddComponent<SalvageCore>(); core.transform.SetParent(world);
-                core.transform.position=SurfacePoint(lat[s]+c*2,lon+(c-1.5f)*3,155+(s%2)*300+c*8);
-                // One unstable reactor per field is a weapon lying on the table; armour is rarer so the seeker stays a choice, not a chore.
-                core.kind=c==2?CoreKind.Volatile:(c==3 && s%3==0?CoreKind.Armored:CoreKind.Normal);
+                // Longitude spread is centred on the field whatever its size, so a three-wreck field is not lopsided.
+                core.transform.position=SurfacePoint(lat[s]+c*2,lon+(c-(wrecks-1)*.5f)*3,155+(orbit?300:0)+c*8);
+                // One unstable reactor per field is a weapon lying on the table; armour only ever appears on a surface
+                // field, where there is room to run a seeker pass, and only on two of the three so it stays a choice.
+                core.kind=c==2?CoreKind.Volatile:(!orbit && c==3 && s%4==0?CoreKind.Armored:CoreKind.Normal);
                 core.maxHealth=core.kind==CoreKind.Armored?200:65; core.health=core.maxHealth;
-                core.value=s%2==0?8:16; BuildCore(core); cores.Add(core);
+                core.site=s; core.value=orbit?24:8; BuildCore(core); cores.Add(core);
                 if(c==0) for(int n=0;n<5;n++) SpawnShard(core.transform.position+new Vector3(n*7-14,4,-20),core.value);
             }
         }
@@ -489,6 +518,50 @@ public partial class AerialCombatPrototype : MonoBehaviour
         if(focused)CenterStick();
         else if(player){player.controls=Vector3.zero;player.boost=false;mouseStick=Vector2.zero;}
     }
+    // A scheduled note. Four fields in a struct because a melody is at most four of them and none of it outlives a second.
+    public struct Note { public AudioClip clip; public float delay,pitch,volume; }
+    public readonly List<Note> notes=new List<Note>();
+    public void Cue(AudioClip clip,float delay,float pitch,float volume){ if(clip)notes.Add(new Note{clip=clip,delay=delay,pitch=pitch,volume=volume}); }
+    // A melody is one clip and a list of ratios: 1 / 1.25 / 1.5 is a major triad, and .09 s of spacing reads as an
+    // arpeggio rather than a chord without ever running past the 3 s toast it sits beside.
+    public void Chord(AudioClip clip,float spacing,float volume,params float[] pitches)
+    {
+        for(int i=0;i<pitches.Length;i++) Cue(clip,i*spacing,pitches[i],volume);
+    }
+    public void ClaimChime(float volume){ Chord(chimeNote,.09f,volume,1,1.25f,1.5f); }
+    public void BankArpeggio(float volume){ Chord(bankNote,.075f,volume,1,1.2f,1.5f,1.8f); }
+
+    // Every continuous audio level, in one dt method so the harness can drive the mix without waiting for frames.
+    // Volumes are a function of simulation state only; the clock is Update's, because nothing here feeds back into the sim.
+    public void TickAudio(float dt)
+    {
+        if(!idleSource || !burnerSource || !windSource) return;
+        bool flying=player && player.Alive && !paused;
+        float throttle=flying?player.throttle:0, speed=flying?player.Speed:0;
+        // Idle is loudest with the throttle closed and never disappears; the burner is what throttle and boost buy.
+        idleSource.volume=flying?.06f+.06f*(1-throttle):0;
+        burnerSource.volume=flying?throttle*.09f+(player.boost?.08f:0):0;
+        // Pitch drift is clamped to +-.25 on the burner (and .6 of that on the idle bed): past that a loop stops sounding
+        // like an engine under load and starts sounding like a tape being spun.
+        float drift=Mathf.Clamp(speed/240f-.25f,-.25f,.25f);
+        idleSource.pitch=1+drift*.6f; burnerSource.pitch=1+drift;
+        // Same gate as DriveWindStreaks: nothing under 40 m/s, and the density term is read at the camera, not the
+        // aircraft, so the bed fades out of the listener's ear rather than the ship's.
+        float air=flying?Mathf.Clamp01((speed-40)/140f)*Density(Altitude(cam?cam.transform.position:player.transform.position)):0;
+        windSource.volume=air*.65f;
+        // A paused world keeps its queue: a countdown pip firing behind the comfort overlay would be a ghost.
+        if(paused) return;
+        for(int i=notes.Count-1;i>=0;i--)
+        {
+            var n=notes[i]; n.delay-=dt;
+            if(n.delay>0){notes[i]=n;continue;}
+            notes.RemoveAt(i);
+            if(noteVoices==null)continue;
+            var voice=noteVoices[noteVoice=(noteVoice+1)%noteVoices.Length];
+            voice.pitch=n.pitch; voice.PlayOneShot(n.clip,n.volume);
+        }
+    }
+
     void Update()
     {
         var k=Keyboard.current;
@@ -515,7 +588,7 @@ public partial class AerialCombatPrototype : MonoBehaviour
                     SaveComfort();
                 }
             }
-            engineSource.volume=0; return;
+            TickAudio(0); return;
         }
         float dt=Time.deltaTime; elapsed+=dt; MatchTick(dt);
         if(k!=null && phase==MatchPhase.Ended && k.enterKey.wasPressedThisFrame) RestartMatch();
@@ -557,8 +630,8 @@ public partial class AerialCombatPrototype : MonoBehaviour
             if((m!=null && m.leftButton.isPressed)||k.fKey.isPressed) Shoot(player);
             if(m!=null && m.rightButton.wasPressedThisFrame) SeekerPress();
         }
-        engineSource.volume=player.Alive?.07f+player.throttle*.08f:0;
-        engineSource.pitch=.65f+player.Speed/180+ (player.boost?.4f:0);
+        // Single writer for every looping level and the scheduled notes; nothing else in Update touches an AudioSource.
+        TickAudio(raw);
     }
 
     // Missile proximity and the lock tone are both rates, and a rate needs the simulation clock, not Update's.

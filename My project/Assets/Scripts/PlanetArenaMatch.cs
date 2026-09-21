@@ -15,6 +15,8 @@ public partial class AerialCombatPrototype
     public bool MatchActive => phase==MatchPhase.Playing;
     public float MatchRemaining => phase==MatchPhase.Playing?Mathf.Max(0,MatchLength-phaseTimer):(phase==MatchPhase.Countdown?MatchLength:0);
     int heartbeatMark=-1;
+    // Last whole second of the countdown that has already been sounded; -1 so the first frame fires the "3" pip.
+    int countdownMark=-1;
 
     // Pure wall-clock state machine: it owns no simulation state, so it lives in Update beside the other timers instead of FixedUpdate.
     public void MatchTick(float dt)
@@ -22,7 +24,11 @@ public partial class AerialCombatPrototype
         phaseTimer+=dt;
         if(phase==MatchPhase.Countdown)
         {
-            if(phaseTimer>=CountdownLength){phase=MatchPhase.Playing;phaseTimer=0;heartbeatMark=-1;}
+            // One pip per numeral, each a step higher than the last, then a fifth above the lot of them on GO. The stored
+            // mark is what stops a slow frame sounding the same second twice, exactly like the heartbeat below.
+            int tick=Mathf.CeilToInt(CountdownLength-phaseTimer);
+            if(tick!=countdownMark){countdownMark=tick;if(tick>0)Cue(countPip,0,1+(CountdownLength-tick)*.12f,.4f);}
+            if(phaseTimer>=CountdownLength){phase=MatchPhase.Playing;phaseTimer=0;heartbeatMark=-1;countdownMark=-1;Cue(countPip,0,1.5f,.55f);}
         }
         else if(phase==MatchPhase.Playing)
         {
@@ -35,7 +41,8 @@ public partial class AerialCombatPrototype
             }
             overchargeTimer+=dt;
             if(overchargeTimer>=OverchargeInterval){overchargeTimer-=OverchargeInterval;TriggerOvercharge();}
-            if(phaseTimer>=MatchLength){phase=MatchPhase.Ended;phaseTimer=0;Banner("MATCH COMPLETE");}
+            // A four-note fanfare under the results panel: the only cue in the game that is allowed to be slow.
+            if(phaseTimer>=MatchLength){phase=MatchPhase.Ended;phaseTimer=0;Banner("MATCH COMPLETE");Chord(stingNote,.22f,.55f,1,1.25f,1.5f,2);}
         }
     }
 
@@ -86,6 +93,8 @@ public partial class AerialCombatPrototype
         // The information layer is board state too: a restart that kept last match's feed would open on somebody else's kills.
         toasts.Clear();cargoPop=0;bankPop=0;hitPop=0;hitGold=0;preciseTag=0;targetLock=0;hudTarget=null;
         missileRange=-1;missileBeep=0;overheated=false;lockBeep=0;
-        phase=MatchPhase.Countdown;phaseTimer=0;overchargeTimer=0;heartbeatMark=-1;
+        phase=MatchPhase.Countdown;phaseTimer=0;overchargeTimer=0;heartbeatMark=-1;countdownMark=-1;
+        // A queued chime from last match's final claim would land over the new countdown; the note queue is board state too.
+        notes.Clear();
     }
 }

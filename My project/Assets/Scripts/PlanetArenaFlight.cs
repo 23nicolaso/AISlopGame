@@ -194,6 +194,8 @@ public enum CoreKind { Normal, Volatile, Armored }
 public class SalvageCore : MonoBehaviour
 {
     public int value;
+    // Which refinery field this wreck belongs to. Build-time state, so it survives RestartMatch like the mesh does.
+    public int site;
     public CoreKind kind;
     public float health=65, maxHealth=65, cooldown;
     public const float BlastRadius=45, BlastDamage=55;
@@ -263,6 +265,8 @@ public class SalvageShard : MonoBehaviour
 public class CaptureGate : MonoBehaviour
 {
     public int index, owner=-1, claimant=-1;
+    // True for the three 460 m fields: sets the dock lighting at build time and marks the high-value band everywhere else.
+    public bool lowOrbit;
     public float progress;
     // Seconds left on a double-rate refining surge. The match clock owns the trigger; the gate only counts it down.
     public float overcharge;
@@ -294,6 +298,9 @@ public class CaptureGate : MonoBehaviour
                 {
                     owner=occupant.id; ownerAge=0; occupant.score+=25;
                     g.Toast("REFINERY "+(index+1)+"  CLAIMED  +25",occupant==g.player?new Color(.16f,1,.85f):new Color(1,.45f,.18f));
+                    // Three rising notes beside the toast. A rival taking a ring across the planet is still board news,
+                    // so it chimes too, at a third of the volume: you hear the map change without being shouted at.
+                    g.ClaimChime(occupant==g.player?.5f:.18f);
                     if(occupant==g.player)g.bankPop=.18f;
                 }
                 // The ace refines at a premium: the mark is worth holding onto, which is what makes hunting it worth the risk.
@@ -303,6 +310,8 @@ public class CaptureGate : MonoBehaviour
                     float rate=(g.aceId==occupant.id?1.5f:1)*(overcharge>0?2:1);
                     int banked=Mathf.RoundToInt(occupant.cargo*rate);
                     occupant.score+=banked;occupant.cargo=0;
+                    // Four notes for a deposit against the claim's three: the ear can tell the two events apart blind.
+                    g.BankArpeggio(occupant==g.player?.45f:.14f);
                     if(occupant==g.player){g.Toast("+"+banked+"  BANKED",new Color(.16f,1,.85f));g.bankPop=.18f;}
                 }
                 occupant.health=Mathf.Min(100,occupant.health+dt*10);
