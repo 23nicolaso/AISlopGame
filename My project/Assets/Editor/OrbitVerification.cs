@@ -82,10 +82,54 @@ public static class OrbitVerification
             int scoreA=Play(g,5); Vector3 nA=g.ship.normal; int segA=g.ship.segments.Count; int scoreB=Play(g,5);
             Check(scoreA==scoreB&&segA==g.ship.segments.Count&&(nA-g.ship.normal).magnitude<1e-4f,"two runs from seed 5 match (score "+scoreA+"/"+scoreB+")");
 
-            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism";
+            // 12. A climb offers three distinct unowned skills on the new shell; flying through one takes it and clears the rest.
+            g.Restart(6); s=g.ship; Fill(s,OrbitSnake.EjectQuota[0]); g.Eject();
+            Check(g.skillPods.Count==3,"a climb offers three skills ("+g.skillPods.Count+")");
+            var seen=new System.Collections.Generic.HashSet<OrbitSnake.Skill>(); foreach(var p in g.skillPods){ Check(seen.Add(p.skill),"offered skills are distinct"); Check(p.shell==1&&Mathf.Abs(p.Position.magnitude-OrbitSnake.ShellRadius(1))<.05f,"skill pods sit on the new shell"); }
+            var chosen=g.skillPods[1]; s.Init(chosen.normal,s.tangent,OrbitSnake.ShellRadius(1)); g.Step(Dt);
+            Check(g.Has(chosen.skill)&&g.skillPods.Count==0,"flying through a pod takes that skill and removes the offer");
+
+            // 13. Magnet: a 60 degree contact is a strike bare and a catch with the magnet.
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); for(int i=0;i<3;i++)s.AddSegment(); Ahead(g,20,Quaternion.AngleAxis(60,s.normal)*s.tangent,0);
+            for(int i=0;i<80;i++)g.Step(Dt); Check(g.strikes==1&&g.caught==0,"60 degrees off is a strike without the magnet");
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); g.skills[(int)OrbitSnake.Skill.Magnet]=true; Ahead(g,20,Quaternion.AngleAxis(60,s.normal)*s.tangent,0);
+            for(int i=0;i<80;i++)g.Step(Dt); Check(g.caught==1&&g.strikes==0,"60 degrees off is a catch with the magnet");
+
+            // 14. Armour eats one strike without shedding, then is spent.
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); for(int i=0;i<3;i++)s.AddSegment(); g.skills[(int)OrbitSnake.Skill.Armour]=true; g.armour=1; Ahead(g,30,-s.tangent,40);
+            for(int i=0;i<60;i++)g.Step(Dt); Check(s.segments.Count==3&&g.strikes==1&&g.armour==0&&!g.ended,"armour absorbs a strike and is spent (segments "+s.segments.Count+", armour "+g.armour+")");
+
+            // 15. Whip: Q spends the last segment on a shot that clears the junk ahead.
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); for(int i=0;i<3;i++)s.AddSegment(); g.skills[(int)OrbitSnake.Skill.Whip]=true; var target=Ahead(g,40,-s.tangent,0); int junkBefore=g.junk.Count;
+            Check(g.Whip()&&s.segments.Count==2&&g.junk.Count==junkBefore+1,"whip spends a segment and fires a shot");
+            for(int i=0;i<60;i++)g.Step(Dt); Check(!g.junk.Contains(target)&&g.junk.FindAll(x=>x.shot).Count==0&&g.strikes==0,"the shot clears the junk ahead and is spent");
+
+            // 16. Brake: speed while braking is the documented fraction.
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); g.skills[(int)OrbitSnake.Skill.Brake]=true; s.brake=true; Vector3 b0=s.normal; for(int i=0;i<50;i++)s.Simulate(Dt);
+            float arc=Vector3.Angle(b0,s.normal)*Mathf.Deg2Rad*OrbitSnake.ShellRadius(0); Check(Mathf.Abs(arc-OrbitSnake.Speed*OrbitSnake.BrakeFactor)<1.5f,"braking runs at "+OrbitSnake.BrakeFactor+" speed ("+arc.ToString("F1")+" u/s)");
+
+            // 17. Phase: a dash moves the head sideways by the documented distance and carries it through junk unharmed.
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); for(int i=0;i<3;i++)s.AddSegment(); g.skills[(int)OrbitSnake.Skill.Phase]=true; Ahead(g,10,-s.tangent,0);
+            Vector3 d0=s.normal, right0=s.Right; s.Dash(1); for(int i=0;i<15;i++)g.Step(Dt);
+            float side=Vector3.Dot((s.normal-d0)*OrbitSnake.ShellRadius(0),right0);
+            Check(Mathf.Abs(side-OrbitSnake.DashDistance)<2f&&g.strikes==0&&s.segments.Count==3,"a dash hops "+side.ToString("F1")+" u sideways through junk without a strike");
+
+            // 18. Compound pays 1.5x on ejection.
+            g.Restart(6); s=g.ship; Fill(s,OrbitSnake.EjectQuota[0]); int baseValue=g.EjectValue(OrbitSnake.EjectQuota[0]); g.skills[(int)OrbitSnake.Skill.Compound]=true;
+            Check(g.EjectValue(OrbitSnake.EjectQuota[0])==Mathf.RoundToInt(baseValue*1.5f),"compound multiplies the eject value by 1.5");
+
+            // 19. Wordless HUD: the HUD source draws exactly one label, and that label is an integer.
+            string hud=System.IO.File.ReadAllText(Application.dataPath+"/Scripts/Orbit/OrbitHUD.cs");
+            Check(Count(hud,"GUI.Label(")==1&&hud.Contains("GUI.Label(r,v.ToString(),digits)")&&Count(hud,"GUI.Box(")==0&&Count(hud,"GUI.Button(")==0,"the HUD draws one label and it is digits");
+
+            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism, skill offer and pick, magnet, armour, whip, brake, phase, compound, wordless HUD";
         }
         finally { g.Restart(7); g.paused=wasPaused; }
     }
+
+    static void Quiet(OrbitSnake g){ foreach(var other in g.junk)other.age=-100; }
+    static void Fill(OrbitShip s,int n){ for(int i=0;i<n;i++)s.AddSegment(); }
+    static int Count(string text,string needle){ int c=0,i=0; while((i=text.IndexOf(needle,i,System.StringComparison.Ordinal))>=0){c++;i+=needle.Length;} return c; }
 
     static int Play(OrbitSnake g,int seed)
     {

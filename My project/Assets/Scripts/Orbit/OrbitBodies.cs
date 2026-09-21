@@ -5,13 +5,16 @@ using UnityEngine;
 // positions with cumulative arc length, and segment i sits (i+1) spacings behind the head along it.
 public class OrbitShip : MonoBehaviour
 {
-    public Vector3 normal, tangent; public float radius, targetRadius, turn, grace, shake; public bool dead;
+    public Vector3 normal, tangent; public float radius, targetRadius, turn, grace, shake, tailFlash; public bool dead, brake;
+    public float dashTimer, dashSide;
     public readonly List<Transform> segments=new();
     readonly List<Vector3> trail=new(), trailDir=new(); readonly List<float> trailLen=new();
     public Vector3 Position => normal*radius;
+    public float SpeedNow => OrbitSnake.Speed*(brake?OrbitSnake.BrakeFactor:1);
+    public Vector3 Right => Vector3.Cross(normal,tangent);
     public void Init(Vector3 n,Vector3 t,float r)
     {
-        normal=n.normalized; tangent=(t-normal*Vector3.Dot(t,normal)).normalized; radius=targetRadius=r; dead=false; grace=0; turn=0; shake=0;
+        normal=n.normalized; tangent=(t-normal*Vector3.Dot(t,normal)).normalized; radius=targetRadius=r; dead=false; grace=0; turn=0; shake=0; brake=false; dashTimer=0; tailFlash=0;
         foreach(var s in segments)Destroy(s.gameObject); segments.Clear();
         trail.Clear(); trailDir.Clear(); trailLen.Clear();
         // Prime the trail straight behind the head so a fresh tail has somewhere to sit.
@@ -24,14 +27,18 @@ public class OrbitShip : MonoBehaviour
         if(dead)return;
         // Turning rotates the tangent about the normal; moving rotates both about their cross product — an exact great-circle step.
         tangent=Quaternion.AngleAxis(turn*OrbitSnake.TurnRate*dt,normal)*tangent;
-        Vector3 axis=Vector3.Cross(normal,tangent); float deg=OrbitSnake.Speed*dt/radius*Mathf.Rad2Deg;
-        var step=Quaternion.AngleAxis(deg,axis); normal=(step*normal).normalized; tangent=(step*tangent); tangent=(tangent-normal*Vector3.Dot(tangent,normal)).normalized;
+        Vector3 axis=Vector3.Cross(normal,tangent); float speed=SpeedNow; float deg=speed*dt/radius*Mathf.Rad2Deg;
+        var step=Quaternion.AngleAxis(deg,axis); normal=(step*normal).normalized; tangent=(step*tangent);
+        // Phase hop: the normal slides sideways along Right over DashTime, heading untouched.
+        if(dashTimer>0){ float a=dashSide*OrbitSnake.DashDistance/radius*Mathf.Min(dt,dashTimer)/OrbitSnake.DashTime; Vector3 right=Right; normal=(normal*Mathf.Cos(a)+right*Mathf.Sin(a)).normalized; dashTimer-=dt; }
+        tangent=(tangent-normal*Vector3.Dot(tangent,normal)).normalized;
         radius=Mathf.MoveTowards(radius,targetRadius,dt*60);
-        float len=trailLen[trailLen.Count-1]+OrbitSnake.Speed*dt; trail.Add(normal); trailDir.Add(tangent); trailLen.Add(len);
+        float len=trailLen[trailLen.Count-1]+(normal-trail[trail.Count-1]).magnitude*radius; trail.Add(normal); trailDir.Add(tangent); trailLen.Add(len);
         float keep=(OrbitSnake.MaxSegments+2)*OrbitSnake.SegmentSpacing; while(trailLen.Count>2&&len-trailLen[0]>keep){trail.RemoveAt(0);trailDir.RemoveAt(0);trailLen.RemoveAt(0);}
-        shake=Mathf.Max(0,shake-dt*2);
+        shake=Mathf.Max(0,shake-dt*2); tailFlash=Mathf.Max(0,tailFlash-dt);
         Place();
     }
+    public void Dash(float side){ if(dashTimer>0)return; dashTimer=OrbitSnake.DashTime; dashSide=side; grace=Mathf.Max(grace,OrbitSnake.DashTime+.1f); }
 
     // Trail sample `back` units of arc behind the head: the normal there and the direction the head was moving.
     public Vector3 TrailNormal(float back,out Vector3 dir)
@@ -69,10 +76,11 @@ public class OrbitShip : MonoBehaviour
 }
 
 // Junk on a great circle: position = R (cos phi u + sin phi w), advancing at a fixed angular rate. `axis` is the circle's
-// pole; u,w span its plane. Rate carries the sign, so retrograde junk is just a negative rate.
+// pole; u,w span its plane. Rate carries the sign, so retrograde junk is just a negative rate. A `shot` is a whipped
+// segment on the same rails that clears junk instead of feeding or striking the snake.
 public class OrbitJunk : MonoBehaviour
 {
-    public int shell; public Vector3 axis,u,w; public float phase,rate,age; public bool wreck; public float spin; public Renderer body;
+    public int shell; public Vector3 axis,u,w; public float phase,rate,age; public bool wreck,shot; public float spin; public Renderer body;
     public void Init(int s,Vector3 a,float p,float r,bool isWreck)
     {
         shell=s; axis=a.normalized; phase=p; rate=r; wreck=isWreck; age=0; spin=(p*57)%360;
@@ -85,6 +93,15 @@ public class OrbitJunk : MonoBehaviour
     public Vector3 Direction => (-u*Mathf.Sin(phase)+w*Mathf.Cos(phase))*Mathf.Sign(rate);
     public float Speed => Mathf.Abs(rate)*OrbitSnake.ShellRadius(shell);
     public void Tick(float dt){ phase+=rate*dt; age+=dt; spin+=dt*70; transform.position=Position; transform.rotation=Quaternion.LookRotation(Direction,Normal)*Quaternion.Euler(0,0,spin); }
+}
+
+// A skill on offer: a static icon on the shell. Flying through it takes the skill.
+public class SkillPod : MonoBehaviour
+{
+    public int shell; public Vector3 normal; public OrbitSnake.Skill skill; public float age;
+    public Vector3 Position => normal*OrbitSnake.ShellRadius(shell);
+    public void Init(int s,Vector3 n,OrbitSnake.Skill k){ shell=s; normal=n; skill=k; age=0; transform.position=Position; transform.rotation=Quaternion.LookRotation(Vector3.Cross(normal,Mathf.Abs(normal.y)<.9f?Vector3.up:Vector3.right),normal); }
+    public void Tick(float dt){ age+=dt; transform.position=Position+normal*(Mathf.Sin(age*3)*1.2f); transform.Rotate(0,dt*60,0,Space.Self); }
 }
 
 // An ejected segment: purely cosmetic, drops from the shell into the atmosphere and burns.

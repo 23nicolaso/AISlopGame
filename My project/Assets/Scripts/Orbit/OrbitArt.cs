@@ -63,7 +63,7 @@ public partial class OrbitSnake
     // Junk within reach ahead is tinted by the rule that will decide the contact: green if the heading matches, red if not.
     public void TintJunk()
     {
-        foreach(var j in junk){ if(!j.body)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:(near&&Vector3.Angle(ship.tangent,j.Direction)<CatchAngle?junkCatch:junkStrike); if(j.body.sharedMaterial!=m)j.body.sharedMaterial=m; }
+        foreach(var j in junk){ if(!j.body||j.shot)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:(near&&Vector3.Angle(ship.tangent,j.Direction)<CatchAngle?junkCatch:junkStrike); if(j.body.sharedMaterial!=m)j.body.sharedMaterial=m; }
     }
 
     void BuildCamera()
@@ -82,7 +82,9 @@ public partial class OrbitSnake
     void ApplyCamera()
     {
         camUp=(camUp-ship.normal*Vector3.Dot(camUp,ship.normal)).normalized; if(camUp.sqrMagnitude<.5f)camUp=ship.tangent;
-        camPos=ship.Position+ship.normal*CamHeight; cam.transform.position=camPos; cam.transform.rotation=Quaternion.LookRotation(-ship.normal,camUp);
+        // Win: the camera climbs away for three seconds and the planet shrinks to a point. That is the whole victory screen.
+        float h=CamHeight*(won?1+Mathf.Min(endTimer,3)*3:1);
+        camPos=ship.Position+ship.normal*h; cam.transform.position=camPos; cam.transform.rotation=Quaternion.LookRotation(-ship.normal,camUp);
     }
 
     AudioClip Sound(string name,float length,float start,float end,float noise)
