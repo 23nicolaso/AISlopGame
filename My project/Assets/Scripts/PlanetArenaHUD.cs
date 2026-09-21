@@ -264,8 +264,8 @@ public partial class AerialCombatPrototype
         // Skin temperature is an ember-red sliver pinned under the hull bar, deliberately nowhere near the cyan
         // weapon-heat bar at the right end of the strip: a full bar here means the airframe is already burning.
         float temp=Mathf.Clamp01(player.hullHeat);bool burning=player.hullHeat>1;
-        GUI.color=burning?new Color(1,.55f,.22f):new Color(1,1,1,.72f);
-        Text(new Rect(355,Height-68,140,20),"SKIN "+Mathf.RoundToInt(player.hullHeat*100)+"%",small);
+        GUI.color=burning?new Color(1,.55f,.22f):new Color(1,1,1,.7f);
+        Text(new Rect(427,Height-92,66,22),"SKIN "+Mathf.RoundToInt(player.hullHeat*100)+"%",small);
         GUI.color=Color.white;
         Box(new Rect(355,Height-45,110,3),new Color(.22f,.1f,.07f));
         Box(new Rect(355,Height-45,110*temp,3),burning?Color.Lerp(new Color(1,.45f,.12f),new Color(2.4f,1.6f,.9f),.5f+.5f*Mathf.Sin(Time.unscaledTime*9)):Color.Lerp(new Color(.8f,.34f,.1f),new Color(1.7f,.44f,.1f),temp));
