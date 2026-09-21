@@ -63,3 +63,23 @@ Cargo now has weight. Every ten units adds four percent to gravity and three per
 Holding a refinery is now worth something after the capture. Every twelve seconds an uncontested owner banks five points and the ring flashes white. Holding three rings is seventy-five points a minute of free score, which is the reason to go take someone else's ring instead of farming wrecks — and because two pilots inside a ring contest it, taking one means shooting the defender out first.
 
 `Rift > Verify planetary arena` adds four checks for this work: Ended blocks damage, fire and pickups; restart returns every pilot and gate to a fresh countdown; a 150-unit hold ends five seconds of neutral flight lower and slower than an empty one; and a held refinery pays exactly five points per twelve-second cycle without double-paying. Both verification menus pin the match phase to Playing while they run and restore it afterwards.
+
+## Rival personalities, wreck variants and the bounty
+
+The seven callsigns are no longer interchangeable. Each one carries its own engagement range, banking threshold, aim error, reaction delay, cargo greed and grudge length, and the leaderboard prints a four-letter tag beside every name so the differences are readable from the first match:
+
+| Callsign | Tag | Flies like |
+| --- | --- | --- |
+| Moth.exe | HUNT | Commits from 800 m and reacts in 0.3 s. The most dangerous aircraft on the board. |
+| Blue Finch | HORD | Banks at 80 cargo and rarely picks a fight, so it is usually the fattest target in the sky. |
+| Periapsis | VULT | Chooses targets almost purely by what they are carrying, and will trade a blast radius for the kill. |
+| DustRunner | STDY | Banks at 25. Small frequent deposits that are hard to pull away from. |
+| Kite-09 | AVNG | Slowest to notice a hit, holds the grudge for fifteen seconds. |
+| SoupDragon | ROOK | Three degrees of aim error. The arena's free first kill. |
+| Last Comet | ELIT | No weak axis: half a degree of error, fast reactions, banks at 50. |
+
+Salvage wrecks come in three kinds now, each with its own silhouette. Ordinary wrecks are unchanged. **Volatile** reactors glow violet behind a split containment cage: destroying one deals 55 damage to every pilot within 45 m — including whoever fired the shot — and spills half again as much cargo. Leading a pursuer past one is a weapon; taking the shot from inside the radius is a choice. **Armored** wrecks wear slate belts over a 200-point hull, shrug cannon fire down to thirty percent, take full missile damage, and drop three times the cargo, which finally gives the seven-second seeker a second job. Rivals keep a 60 m standoff from volatile reactors so they stop detonating them under their own nose — except the vulture, which accepts 25 m.
+
+Three unanswered kills crown an **ace**. The ace's tracers turn gold, refining pays 1.5x, a pulsing BOUNTY strip appears under the match clock and the leaderboard tag switches to ACE. Every rival weights its target scoring toward that pilot until the mark dies, so a runaway leader gets hunted and a trailing pilot has a route back in without any explicit difficulty dial. Dying clears the streak and the bounty.
+
+`Rift > Verify flip stability and rival combat` adds three checks: an armored wreck takes 30 of 100 cannon damage and the full 100 from a missile; a volatile detonation costs a pilot 30 m away exactly 55 hull and a pilot 300 m away nothing; and three kills set the bounty to the killer while killing that pilot clears it.

@@ -8,6 +8,10 @@
 
 ### Added
 
+- **七个对手七种个性**（`MECHANICS-DESIGN.md` §7）：新 `ArenaPersonality` 只读表按 `id` 索引，字段 `aggression` / `bankAt` / `aimJitter` / `reaction` / `greed` / `revenge`。AI 里原先由 `id` 推导的常数（`id%3==0?720:470`、`cargo>=35`、`.4f+(id%5)*.1f`、cargo 权重 `1.5f`、`retaliation=9`）全部换成查表；`Shoot()` 里按 `aimJitter` 给非玩家的开火方向加 0.5°–3° 随机偏转。排行榜每个呼号右侧加 4 字标签（HUNT / HORD / VULT / STDY / AVNG / ROOK / ELIT）。
+- **易爆与装甲残骸**（§2、§10）：`SalvageCore` 加 `CoreKind{Normal,Volatile,Armored}` 与 `maxHealth`。每个站点 `c==2` 是 Volatile（紫色反应堆 + 分裂约束笼 + 破裂冷却阀，`weakPoint` 脉动加快一倍），摧毁时对 45 m 内所有存活 pilot（含开火者本人）造成 55 伤害、走 `Feedback("large")`、掉落 1.5× 货物；`s%3==0` 的站点 `c==3` 是 Armored（新增 `slate` 暗色装甲材质 + 四道装甲带），血量 200、机炮伤害 ×0.3、导弹全额（`Hit` 新增 `bool missile` 参数，`ArenaBolt` 传 `seeker`）、掉落 3× 货物。AI 选 `coreTarget` 时跳过 60 m 内的 Volatile（`greed>=2` 的秃鹫只留 25 m）。
+- **王牌连杀与悬赏**（§8）：`ArenaPilot.streak` + `AerialCombatPrototype.aceId`。`Kill()` 里受害者清零并让出悬赏，凶手连杀达 3 即成为 ACE。ACE 期间曳光与拖尾变金、在环里存分 ×1.5、排行榜标签变 "ACE"、屏幕顶部 `MatchClock` 下方出现脉动的 "BOUNTY <呼号>" 条（首次加冕有 1.35× 入场缩放）。所有 AI 的目标评分对 ACE 的 cargo 权重 ×2 并额外减 300 的平坦拉力，空手的 ACE 同样会被围攻。死亡即清除，`RestartMatch()` 一并重置。
+- `RiftCombatVerification`：三项新校验 —— 装甲残骸对 100 机炮伤害只掉 30 血、对 100 导弹伤害掉满 100；易爆残骸炸毁时 30 m 外的 pilot 恰好掉 55 血、300 m 外的不掉；连续 3 杀后 `aceId` 指向凶手、该 pilot 被击落后 `aceId` 归 -1。PASS 日志串加入 `armored cannon discount, volatile blast radius, ace bounty crowning and clearing`；`finally` 一并复原 streak / aceId / 残骸血量并清扫爆炸掉落的货物。
 - **比赛结构**（`IMPROVEMENT-PLAN.md` WP-C 第 1–2 条）：新 partial `PlanetArenaMatch.cs`，`MatchPhase{Countdown,Playing,Ended}` —— 倒计时 3 s（武器冷）→ 比赛 300 s → 结算（无限期）。`MatchActive` 与 `paused` 并列插进 `Damage` / `Shoot` / `Collect` / `CaptureGate.Tick` 四个已有检查点。`RestartMatch()` 按 Enter 触发：全员 `Spawn(initial:true)`、清 score/cargo/kills/deaths、所有环归中立、清扫散落货物与已破残骸。
 - **HUD 比赛信息层**：顶部中央 `M:SS` 倒计时（最后 60 s 变红并随秒脉冲，每整 10 s 一次心跳音，最后 10 s 加重）；倒计时阶段中央 3 / 2 / 1 / GO 大字（1.5× pop + 外扩环）；结算面板含排名 / 呼号 / kills / losses / banked，冠军行金色，底部脉动 "PRESS ENTER TO RESTART"。
 - **货物有重量**（`MECHANICS-DESIGN.md` §1）：每 10 单位 cargo 让重力 +4%、阻力 +3%，上限 +60% / +45%，对 AI 同样生效。HUD 的 CARGO 在 ≥60 时变金并显示脉动的 "HEAVY" 标签。
