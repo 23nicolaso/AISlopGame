@@ -11,6 +11,7 @@ public partial class OrbitSnake
     Material planetMat, hullMat, segMat, segMatAlt, junkNeutral, junkCatch, junkStrike, wreckMat, fallMat, glowMat, exhaustMat, sparkMat, gridMat, starMat;
     // Layer 3 in TagManager is named Planet: the planet and clouds sit on it so the camera headlight can leave them alone.
     const int PlanetLayer=3;
+    static readonly Quaternion PlanetTilt=Quaternion.Euler(90,0,0);
     Vector3 camPos, camUp; UniversalAdditionalCameraData camData;
     ParticleSystem sparks; Transform cloudLayer;
     public Vector3 sunDir=new Vector3(-.55f,.6f,-.58f).normalized;
@@ -31,20 +32,25 @@ public partial class OrbitSnake
         fallMat=Mat(new Color(1.5f,.62f,.12f),true); glowMat=Mat(new Color(.45f,1.15f,1.5f),true); exhaustMat=Additive(new Color(.35f,.9f,1.3f),.9f); sparkMat=Additive(Color.white,1);
         gridMat=Mat(new Color(.26f,.32f,.44f),true); starMat=Additive(new Color(.75f,.8f,.95f),1);
         // Planet: a smooth lat-long sphere so the limb is round from 275 u up, lit by the sun so it has a terminator.
-        var planet=new GameObject("Planet"); planet.transform.SetParent(world,false); planet.layer=PlanetLayer;
+        // The map is tilted 90 degrees so the ship's start (world up) sits over the equator, not on a pole and its ice cap.
+        var planet=new GameObject("Planet"); planet.transform.SetParent(world,false); planet.layer=PlanetLayer; planet.transform.rotation=PlanetTilt;
         planet.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius,128,64); planet.AddComponent<MeshRenderer>().sharedMaterial=planetMat;
         // Cloud layer: the same map's cloud channel on a slightly larger sphere, drifting slowly so the surface reads as alive.
         // Matte clouds: with the default metallic/smoothness the cloud shell's specular bloomed into a white starburst on
         // the ocean (the sun's glint on a sphere 2.5 u above the water), which together with the pole knot read as inside-out.
-        var cloudMat=Mat(Color.white,false); cloudMat.SetFloat("_Metallic",0); cloudMat.SetFloat("_Smoothness",0); cloudMat.SetTexture("_BaseMap",CloudTexture()); cloudMat.SetFloat("_Surface",1); cloudMat.SetFloat("_Blend",0); cloudMat.SetOverrideTag("RenderType","Transparent"); cloudMat.renderQueue=3000; cloudMat.SetInt("_SrcBlend",(int)BlendMode.SrcAlpha); cloudMat.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha); cloudMat.SetInt("_ZWrite",0); cloudMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); cloudMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
-        var clouds=new GameObject("Clouds"); clouds.transform.SetParent(world,false); clouds.layer=PlanetLayer; clouds.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius+2.5f,96,48); clouds.AddComponent<MeshRenderer>().sharedMaterial=cloudMat; cloudLayer=clouds.transform;
+        // Built from the transparent Lit anchor when it exists (RiftBuild.EnsureShaderAssets), so a player build keeps the
+        // transparent variant; the keyword setup below is repeated for the Editor, where no anchor is needed.
+        var cloudAnchor=Resources.Load<Material>("RiftShaders/UniversalRenderPipeline_Lit_Transparent");
+        var cloudMat=cloudAnchor?new Material(cloudAnchor):Mat(Color.white,false); if(cloudAnchor)owned.Add(cloudMat);
+        cloudMat.SetColor("_BaseColor",Color.white); cloudMat.color=Color.white; cloudMat.SetFloat("_Metallic",0); cloudMat.SetFloat("_Smoothness",0); cloudMat.SetTexture("_BaseMap",CloudTexture()); cloudMat.SetFloat("_Surface",1); cloudMat.SetFloat("_Blend",0); cloudMat.SetOverrideTag("RenderType","Transparent"); cloudMat.renderQueue=3000; cloudMat.SetInt("_SrcBlend",(int)BlendMode.SrcAlpha); cloudMat.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha); cloudMat.SetInt("_ZWrite",0); cloudMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); cloudMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+        var clouds=new GameObject("Clouds"); clouds.transform.SetParent(world,false); clouds.layer=PlanetLayer; clouds.transform.rotation=PlanetTilt; clouds.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius+2.5f,96,48); clouds.AddComponent<MeshRenderer>().sharedMaterial=cloudMat; cloudLayer=clouds.transform;
         // Grid every 15 degrees, faint: from straight above it is what shows speed over an ocean. Meridians are arcs that
         // stop at ±75° like a globe's, so they never bunch into a knot at the poles (the knot read as a hole in the sphere).
         // Grid lines cast no shadows: the sun has none (below), and nothing else should shade the surface either.
         for(int i=0;i<35;i++){ var ring=new GameObject("Grid").AddComponent<LineRenderer>(); ring.transform.SetParent(world,false); ring.useWorldSpace=true; ring.positionCount=128; ring.widthMultiplier=.3f; ring.sharedMaterial=gridMat; ring.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off; ring.receiveShadows=false;
             bool lon=i<24; ring.loop=!lon; float R=PlanetRadius+3.2f;
-            if(lon){ var q=Quaternion.AngleAxis(i*15,Vector3.up); for(int k=0;k<128;k++){ float a=Mathf.Lerp(-75,75,k/127f)*Mathf.Deg2Rad; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*R,Mathf.Sin(a)*R,0)); } }
-            else { float lat=(i-24)*15-75; float r=Mathf.Cos(lat*Mathf.Deg2Rad)*R, y=Mathf.Sin(lat*Mathf.Deg2Rad)*R; for(int k=0;k<128;k++){ float a=k*Mathf.PI*2/128; ring.SetPosition(k,new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } } }
+            if(lon){ var q=PlanetTilt*Quaternion.AngleAxis(i*15,Vector3.up); for(int k=0;k<128;k++){ float a=Mathf.Lerp(-75,75,k/127f)*Mathf.Deg2Rad; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*R,Mathf.Sin(a)*R,0)); } }
+            else { float lat=(i-24)*15-75; float r=Mathf.Cos(lat*Mathf.Deg2Rad)*R, y=Mathf.Sin(lat*Mathf.Deg2Rad)*R; for(int k=0;k<128;k++){ float a=k*Mathf.PI*2/128; ring.SetPosition(k,PlanetTilt*new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } } }
         // Atmosphere limb: RIFT's shader, re-centred on the origin. Cull Front, so it is seen from inside as a halo on the disc.
         var atmoShader=Shader.Find("Rift/Atmosphere");
         if(atmoShader){ var atmo=new Material(atmoShader); owned.Add(atmo); atmo.SetVector("_PlanetCenter",Vector3.zero); atmo.SetFloat("_Radius",PlanetRadius); Shape("Atmosphere",world,PrimitiveType.Sphere,Vector3.zero,Vector3.one*(PlanetRadius+12)*2,atmo); }
@@ -76,31 +82,36 @@ public partial class OrbitSnake
     // material is lit). 1024x512, generated once.
     Texture2D PlanetTexture()
     {
-        // No mip chain: at the poles the lat-long sphere's sliver triangles sweep u from 0 to 1 in a few pixels, the GPU
-        // picks the 1x1 mip (the map's average, dark blue) and the pole renders as a dark starburst. The camera sits 85 u
-        // over a 160 u sphere, so the map is magnified, never minified, and mips buy nothing.
-        var t=new Texture2D(1024,512,TextureFormat.RGB24,false); t.wrapMode=TextureWrapMode.Repeat; var px=new Color[1024*512];
-        for(int y=0;y<512;y++)for(int x=0;x<1024;x++)
+        // 2048x1024: from 115 u above the surface a texel is half a unit, about 3 px on screen. Noise is sampled in the old
+        // 1024x512 texel space so the continents keep their size. Mips stay on for the limb; the poles are handled by the mesh UVs.
+        int W=debug.Contains("tex1024")?1024:2048,H=W/2; var t=new Texture2D(W,H,debug.Contains("rgba")?TextureFormat.RGBA32:TextureFormat.RGB24,!debug.Contains("nomip")); t.wrapMode=TextureWrapMode.Repeat; t.anisoLevel=debug.Contains("noaniso")?1:8; var px=new Color[W*H];
+        for(int y=0;y<H;y++)for(int x=0;x<W;x++)
         {
-            float lat=Mathf.Abs(y/512f-.5f)*2; float n=Mathf.PerlinNoise(x*.006f+7,y*.012f+3)+.4f*Mathf.PerlinNoise(x*.02f,y*.04f)+.15f*Mathf.PerlinNoise(x*.06f,y*.12f);
+            float sx=x*1024f/W, sy=y*512f/H;
+            float lat=Mathf.Abs((float)y/H-.5f)*2; float n=Mathf.PerlinNoise(sx*.006f+7,sy*.012f+3)+.4f*Mathf.PerlinNoise(sx*.02f,sy*.04f)+.15f*Mathf.PerlinNoise(sx*.06f,sy*.12f);
             Color c=n<.72f?Color.Lerp(new Color(.04f,.12f,.28f),new Color(.08f,.3f,.5f),Mathf.InverseLerp(.3f,.72f,n)):n<.78f?Color.Lerp(new Color(.12f,.38f,.5f),new Color(.55f,.5f,.34f),Mathf.InverseLerp(.72f,.78f,n)):n<1.05f?Color.Lerp(new Color(.24f,.42f,.22f),new Color(.5f,.46f,.3f),Mathf.InverseLerp(.78f,1.05f,n)):Color.Lerp(new Color(.62f,.6f,.55f),new Color(.9f,.92f,.95f),Mathf.InverseLerp(1.05f,1.3f,n));
-            float ice=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.82f,.95f,lat+.08f*Mathf.PerlinNoise(x*.03f,y*.03f))); c=Color.Lerp(c,new Color(.92f,.95f,1f),ice);
-            px[y*1024+x]=c;
+            // Ice caps above ~81 degrees: small, so the map is land and sea, not a white lid.
+            float ice=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.9f,.97f,lat+.06f*Mathf.PerlinNoise(sx*.03f,sy*.03f))); c=Color.Lerp(c,new Color(.92f,.95f,1f),ice);
+            px[y*W+x]=c;
         }
-        t.SetPixels(px); t.Apply(false); owned.Add(t); return t;
+        t.SetPixels(px); t.Apply(!debug.Contains("nomip")); Debug.Log("[ART] planet texture "+W+"x"+H+" "+t.format+" mips="+t.mipmapCount); owned.Add(t); return t;
     }
     Texture2D CloudTexture()
     {
-        var t=new Texture2D(512,256,TextureFormat.RGBA32,false); t.wrapMode=TextureWrapMode.Repeat; var px=new Color[512*256];
-        for(int y=0;y<256;y++)for(int x=0;x<512;x++){ float c=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,.85f,Mathf.PerlinNoise(x*.014f+51,y*.028f+9)+.3f*Mathf.PerlinNoise(x*.05f,y*.1f))); px[y*512+x]=new Color(1,1,1,c*.8f); }
-        t.SetPixels(px); t.Apply(false); owned.Add(t); return t;
+        int W=debug.Contains("tex1024")?512:1024,H=W/2; var t=new Texture2D(W,H,TextureFormat.RGBA32,!debug.Contains("nomip")); t.wrapMode=TextureWrapMode.Repeat; t.anisoLevel=debug.Contains("noaniso")?1:8; var px=new Color[W*H];
+        for(int y=0;y<H;y++)for(int x=0;x<W;x++){ float sx=x*512f/W, sy=y*256f/H; float c=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,.85f,Mathf.PerlinNoise(sx*.014f+51,sy*.028f+9)+.3f*Mathf.PerlinNoise(sx*.05f,sy*.1f))); px[y*W+x]=new Color(1,1,1,c*.8f); }
+        t.SetPixels(px); t.Apply(true); owned.Add(t); return t;
     }
 
+    // Lat-long sphere with its front faces OUTWARD. The first version wound them inward (a, a+lon+1, a+1 is
+    // counter-clockwise from outside in Unity's left-handed convention), so the near surface was culled and every
+    // platform showed the far hemisphere's inner wall: a mirrored map lit from behind, which the user read as
+    // "the texture is inside-out". Pole vertices take the centre u of their sliver so the mip selection there stays sane.
     Mesh Sphere(float r,int lon,int lat)
     {
         var v=new Vector3[(lon+1)*(lat+1)]; var n=new Vector3[v.Length]; var uv=new Vector2[v.Length]; var t=new int[lon*lat*6]; int i=0;
-        for(int y=0;y<=lat;y++)for(int x=0;x<=lon;x++){ float a=x*Mathf.PI*2/lon,b=y*Mathf.PI/lat; n[i]=new Vector3(Mathf.Sin(b)*Mathf.Cos(a),Mathf.Cos(b),Mathf.Sin(b)*Mathf.Sin(a)); v[i]=n[i]*r; uv[i]=new Vector2((float)x/lon,1-(float)y/lat); i++; }
-        i=0; for(int y=0;y<lat;y++)for(int x=0;x<lon;x++){ int a=y*(lon+1)+x; t[i++]=a;t[i++]=a+lon+1;t[i++]=a+1; t[i++]=a+1;t[i++]=a+lon+1;t[i++]=a+lon+2; }
+        for(int y=0;y<=lat;y++)for(int x=0;x<=lon;x++){ float a=x*Mathf.PI*2/lon,b=y*Mathf.PI/lat; n[i]=new Vector3(Mathf.Sin(b)*Mathf.Cos(a),Mathf.Cos(b),Mathf.Sin(b)*Mathf.Sin(a)); v[i]=n[i]*r; bool pole=y==0||y==lat; uv[i]=new Vector2((pole?x+.5f:x)/lon,1-(float)y/lat); i++; }
+        i=0; for(int y=0;y<lat;y++)for(int x=0;x<lon;x++){ int a=y*(lon+1)+x; t[i++]=a;t[i++]=a+1;t[i++]=a+lon+1; t[i++]=a+1;t[i++]=a+lon+2;t[i++]=a+lon+1; }
         var m=new Mesh{name="Sphere",indexFormat=IndexFormat.UInt32,vertices=v,normals=n,uv=uv,triangles=t}; m.RecalculateBounds(); owned.Add(m); return m;
     }
 
@@ -155,7 +166,7 @@ public partial class OrbitSnake
     public void TintJunk()
     {
         foreach(var j in junk){ if(j.tint==null||j.shot)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:!near?junkNeutral:(Vector3.Angle(ship.tangent,j.Direction)<CatchAngleNow?junkCatch:junkStrike); if(j.body&&j.body.sharedMaterial!=m)foreach(var r in j.tint)if(r)r.sharedMaterial=m; }
-        if(cloudLayer)cloudLayer.Rotate(0,Time.deltaTime*.4f,0,Space.World);
+        if(cloudLayer)cloudLayer.Rotate(PlanetTilt*Vector3.up,Time.deltaTime*.4f,Space.World);
     }
 
     void BuildCamera()

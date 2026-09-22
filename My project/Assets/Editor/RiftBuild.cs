@@ -28,6 +28,19 @@ public static class RiftBuild
             AssetDatabase.CreateAsset(new Material(shader), path);
             Debug.Log("[BUILD] created shader anchor " + path);
         }
+        // The cloud shell is a transparent Lit material made at runtime. Variant stripping only keeps what some material
+        // asset uses, and with just an opaque Lit anchor the WebGL build dropped _SURFACE_TYPE_TRANSPARENT: the clouds
+        // came out as an opaque white ball around the planet. This anchor carries the transparent keywords.
+        const string transparentPath = "Assets/Resources/RiftShaders/UniversalRenderPipeline_Lit_Transparent.mat";
+        if (!AssetDatabase.LoadAssetAtPath<Material>(transparentPath))
+        {
+            var m = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            m.SetFloat("_Surface", 1); m.SetFloat("_Blend", 0); m.SetFloat("_ZWrite", 0); m.SetFloat("_SrcBlend", 5); m.SetFloat("_DstBlend", 10);
+            m.SetOverrideTag("RenderType", "Transparent"); m.renderQueue = 3000;
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); m.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+            AssetDatabase.CreateAsset(m, transparentPath);
+            Debug.Log("[BUILD] created shader anchor " + transparentPath);
+        }
         AssetDatabase.SaveAssets();
     }
 
