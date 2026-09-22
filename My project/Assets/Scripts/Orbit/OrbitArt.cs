@@ -76,7 +76,10 @@ public partial class OrbitSnake
     // material is lit). 1024x512, generated once.
     Texture2D PlanetTexture()
     {
-        var t=new Texture2D(1024,512,TextureFormat.RGB24,true); t.wrapMode=TextureWrapMode.Repeat; var px=new Color[1024*512];
+        // No mip chain: at the poles the lat-long sphere's sliver triangles sweep u from 0 to 1 in a few pixels, the GPU
+        // picks the 1x1 mip (the map's average, dark blue) and the pole renders as a dark starburst. The camera sits 85 u
+        // over a 160 u sphere, so the map is magnified, never minified, and mips buy nothing.
+        var t=new Texture2D(1024,512,TextureFormat.RGB24,false); t.wrapMode=TextureWrapMode.Repeat; var px=new Color[1024*512];
         for(int y=0;y<512;y++)for(int x=0;x<1024;x++)
         {
             float lat=Mathf.Abs(y/512f-.5f)*2; float n=Mathf.PerlinNoise(x*.006f+7,y*.012f+3)+.4f*Mathf.PerlinNoise(x*.02f,y*.04f)+.15f*Mathf.PerlinNoise(x*.06f,y*.12f);
@@ -84,13 +87,13 @@ public partial class OrbitSnake
             float ice=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.82f,.95f,lat+.08f*Mathf.PerlinNoise(x*.03f,y*.03f))); c=Color.Lerp(c,new Color(.92f,.95f,1f),ice);
             px[y*1024+x]=c;
         }
-        t.SetPixels(px); t.Apply(true); owned.Add(t); return t;
+        t.SetPixels(px); t.Apply(false); owned.Add(t); return t;
     }
     Texture2D CloudTexture()
     {
-        var t=new Texture2D(512,256,TextureFormat.RGBA32,true); t.wrapMode=TextureWrapMode.Repeat; var px=new Color[512*256];
+        var t=new Texture2D(512,256,TextureFormat.RGBA32,false); t.wrapMode=TextureWrapMode.Repeat; var px=new Color[512*256];
         for(int y=0;y<256;y++)for(int x=0;x<512;x++){ float c=Mathf.SmoothStep(0,1,Mathf.InverseLerp(.55f,.85f,Mathf.PerlinNoise(x*.014f+51,y*.028f+9)+.3f*Mathf.PerlinNoise(x*.05f,y*.1f))); px[y*512+x]=new Color(1,1,1,c*.8f); }
-        t.SetPixels(px); t.Apply(true); owned.Add(t); return t;
+        t.SetPixels(px); t.Apply(false); owned.Add(t); return t;
     }
 
     Mesh Sphere(float r,int lon,int lat)
