@@ -32,7 +32,7 @@ const url=`http://127.0.0.1:${server.address().port}/`;
 
 const profile=await mkdtemp(path.join(tmpdir(),'orbit-render-'));
 const port=9222+Math.floor(Math.random()*1000);
-const browser=spawn(chrome,['--headless=new','--hide-scrollbars','--window-size=1280,720','--no-first-run','--no-default-browser-check',`--user-data-dir=${profile}`,`--remote-debugging-port=${port}`,'--autoplay-policy=no-user-gesture-required','--use-angle=default','--enable-unsafe-swiftshader',...(process.env.CI?['--no-sandbox']:[]),'about:blank'],{stdio:'ignore'});
+const browser=spawn(chrome,['--headless=new','--hide-scrollbars','--window-size=1280,720','--no-first-run','--no-default-browser-check',`--user-data-dir=${profile}`,`--remote-debugging-port=${port}`,'--autoplay-policy=no-user-gesture-required',`--use-angle=${process.env.ANGLE||'default'}`,'--enable-unsafe-swiftshader',...(process.env.CI?['--no-sandbox']:[]),'about:blank'],{stdio:'ignore'});
 const cleanup=async()=>{browser.kill();server.close();await rm(profile,{recursive:true,force:true}).catch(()=>{});};
 process.on('exit',()=>browser.kill());
 const deadline=Date.now()+timeoutMs;

@@ -34,19 +34,26 @@ public partial class OrbitSnake
         var planet=new GameObject("Planet"); planet.transform.SetParent(world,false); planet.layer=PlanetLayer;
         planet.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius,128,64); planet.AddComponent<MeshRenderer>().sharedMaterial=planetMat;
         // Cloud layer: the same map's cloud channel on a slightly larger sphere, drifting slowly so the surface reads as alive.
-        var cloudMat=Mat(Color.white,false); cloudMat.SetTexture("_BaseMap",CloudTexture()); cloudMat.SetFloat("_Surface",1); cloudMat.SetFloat("_Blend",0); cloudMat.SetOverrideTag("RenderType","Transparent"); cloudMat.renderQueue=3000; cloudMat.SetInt("_SrcBlend",(int)BlendMode.SrcAlpha); cloudMat.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha); cloudMat.SetInt("_ZWrite",0); cloudMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); cloudMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
+        // Matte clouds: with the default metallic/smoothness the cloud shell's specular bloomed into a white starburst on
+        // the ocean (the sun's glint on a sphere 2.5 u above the water), which together with the pole knot read as inside-out.
+        var cloudMat=Mat(Color.white,false); cloudMat.SetFloat("_Metallic",0); cloudMat.SetFloat("_Smoothness",0); cloudMat.SetTexture("_BaseMap",CloudTexture()); cloudMat.SetFloat("_Surface",1); cloudMat.SetFloat("_Blend",0); cloudMat.SetOverrideTag("RenderType","Transparent"); cloudMat.renderQueue=3000; cloudMat.SetInt("_SrcBlend",(int)BlendMode.SrcAlpha); cloudMat.SetInt("_DstBlend",(int)BlendMode.OneMinusSrcAlpha); cloudMat.SetInt("_ZWrite",0); cloudMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT"); cloudMat.EnableKeyword("_ALPHAPREMULTIPLY_ON");
         var clouds=new GameObject("Clouds"); clouds.transform.SetParent(world,false); clouds.layer=PlanetLayer; clouds.AddComponent<MeshFilter>().sharedMesh=Sphere(PlanetRadius+2.5f,96,48); clouds.AddComponent<MeshRenderer>().sharedMaterial=cloudMat; cloudLayer=clouds.transform;
-        // Grid every 15 degrees, faint: from straight above it is what shows speed over an ocean.
-        for(int i=0;i<23;i++){ var ring=new GameObject("Grid").AddComponent<LineRenderer>(); ring.transform.SetParent(world,false); ring.useWorldSpace=true; ring.loop=true; ring.positionCount=128; ring.widthMultiplier=.3f; ring.sharedMaterial=gridMat;
-            bool lon=i<12; var q=lon?Quaternion.AngleAxis(i*15,Vector3.up)*Quaternion.AngleAxis(90,Vector3.right):Quaternion.identity; float lat=(i-12)*15-75; float r=lon?PlanetRadius+3.2f:Mathf.Cos(lat*Mathf.Deg2Rad)*(PlanetRadius+3.2f); float y=lon?0:Mathf.Sin(lat*Mathf.Deg2Rad)*(PlanetRadius+3.2f);
-            for(int k=0;k<128;k++){ float a=k*Mathf.PI*2/128; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } }
+        // Grid every 15 degrees, faint: from straight above it is what shows speed over an ocean. Meridians are arcs that
+        // stop at ±75° like a globe's, so they never bunch into a knot at the poles (the knot read as a hole in the sphere).
+        // Grid lines cast no shadows: the sun has none (below), and nothing else should shade the surface either.
+        for(int i=0;i<35;i++){ var ring=new GameObject("Grid").AddComponent<LineRenderer>(); ring.transform.SetParent(world,false); ring.useWorldSpace=true; ring.positionCount=128; ring.widthMultiplier=.3f; ring.sharedMaterial=gridMat; ring.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off; ring.receiveShadows=false;
+            bool lon=i<24; ring.loop=!lon; float R=PlanetRadius+3.2f;
+            if(lon){ var q=Quaternion.AngleAxis(i*15,Vector3.up); for(int k=0;k<128;k++){ float a=Mathf.Lerp(-75,75,k/127f)*Mathf.Deg2Rad; ring.SetPosition(k,q*new Vector3(Mathf.Cos(a)*R,Mathf.Sin(a)*R,0)); } }
+            else { float lat=(i-24)*15-75; float r=Mathf.Cos(lat*Mathf.Deg2Rad)*R, y=Mathf.Sin(lat*Mathf.Deg2Rad)*R; for(int k=0;k<128;k++){ float a=k*Mathf.PI*2/128; ring.SetPosition(k,new Vector3(Mathf.Cos(a)*r,y,Mathf.Sin(a)*r)); } } }
         // Atmosphere limb: RIFT's shader, re-centred on the origin. Cull Front, so it is seen from inside as a halo on the disc.
         var atmoShader=Shader.Find("Rift/Atmosphere");
         if(atmoShader){ var atmo=new Material(atmoShader); owned.Add(atmo); atmo.SetVector("_PlanetCenter",Vector3.zero); atmo.SetFloat("_Radius",PlanetRadius); Shape("Atmosphere",world,PrimitiveType.Sphere,Vector3.zero,Vector3.one*(PlanetRadius+12)*2,atmo); }
         // Star field: 700 additive specks on a far sphere. (Nebula blobs were tried and read as dark discs from this camera.)
         var stars=new GameObject("Stars"); stars.transform.SetParent(world,false); var sr=new System.Random(3);
         for(int i=0;i<700;i++){ float z=(float)sr.NextDouble()*2-1,a=(float)sr.NextDouble()*Mathf.PI*2,r=Mathf.Sqrt(1-z*z); Shape("Star",stars.transform,PrimitiveType.Cube,new Vector3(r*Mathf.Cos(a),z,r*Mathf.Sin(a))*1500,Vector3.one*(1.5f+(float)sr.NextDouble()*3.5f),starMat); }
-        var sun=new GameObject("Sun").AddComponent<Light>(); sun.transform.SetParent(world); sun.type=LightType.Directional; sun.intensity=2.6f; sun.color=new Color(1,.95f,.86f); sun.transform.rotation=Quaternion.LookRotation(-sunDir);
+        // No shadows: from this height the only shadows that read were the grid lines' (a black starburst where the meridians
+        // met at a pole), and they made the planet look concave.
+        var sun=new GameObject("Sun").AddComponent<Light>(); sun.transform.SetParent(world); sun.type=LightType.Directional; sun.intensity=2.6f; sun.color=new Color(1,.95f,.86f); sun.transform.rotation=Quaternion.LookRotation(-sunDir); sun.shadows=LightShadows.None;
         // Ambient is high enough that the night side of the planet still shows its continents; the headlight on the camera
         // (BuildCamera) keeps the ship and junk readable there, so the sun only has to draw the terminator.
         RenderSettings.ambientMode=AmbientMode.Trilight; RenderSettings.ambientSkyColor=new Color(.42f,.48f,.62f); RenderSettings.ambientEquatorColor=new Color(.28f,.32f,.44f); RenderSettings.ambientGroundColor=new Color(.16f,.18f,.26f); RenderSettings.skybox=null; RenderSettings.fog=false;
@@ -55,6 +62,10 @@ public partial class OrbitSnake
         var bloom=profile.Add<Bloom>(true); bloom.threshold.Override(1f); bloom.intensity.Override(.7f); bloom.scatter.Override(.6f);
         var vig=profile.Add<Vignette>(true); vig.intensity.Override(.28f); vig.smoothness.Override(.5f);
         var tone=profile.Add<Tonemapping>(true); tone.mode.Override(TonemappingMode.ACES);
+        // URL debug switches (see OrbitSnake.debug): bisect a platform rendering difference without rebuilding.
+        if(debug.Contains("nobloom"))bloom.active=false; if(debug.Contains("notone"))tone.active=false; if(debug.Contains("noclouds"))clouds.SetActive(false);
+        if(debug.Contains("nospec")){ planetMat.SetFloat("_Smoothness",0); cloudMat.SetFloat("_Smoothness",0); }
+        if(debug.Contains("nocloudspec")){ cloudMat.SetFloat("_Smoothness",0); cloudMat.SetFloat("_Metallic",0); }
         // Sparks: one shared burst system for catches and strikes, coloured per burst.
         var sp=new GameObject("Sparks"); sp.transform.SetParent(world,false); sparks=sp.AddComponent<ParticleSystem>(); var main=sparks.main; main.playOnAwake=false; main.loop=false; main.startLifetime=.5f; main.startSpeed=22; main.startSize=1.1f; main.gravityModifier=0; main.simulationSpace=ParticleSystemSimulationSpace.World; main.maxParticles=400;
         var em=sparks.emission; em.enabled=false; var shp=sparks.shape; shp.shapeType=ParticleSystemShapeType.Sphere; shp.radius=.5f; var col=sparks.colorOverLifetime; col.enabled=true; var grad=new Gradient(); grad.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(Color.white,1)},new[]{new GradientAlphaKey(1,0),new GradientAlphaKey(0,1)}); col.color=grad;
@@ -148,12 +159,12 @@ public partial class OrbitSnake
     {
         cam=new GameObject("Orbit camera").AddComponent<Camera>(); cam.transform.SetParent(world); cam.tag="MainCamera";
         cam.clearFlags=CameraClearFlags.SolidColor; cam.backgroundColor=new Color(.008f,.01f,.025f); cam.fieldOfView=62; cam.nearClipPlane=1; cam.farClipPlane=3200; cam.allowHDR=true;
-        camData=cam.GetUniversalAdditionalCameraData(); camData.renderPostProcessing=true; camData.antialiasing=AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+        camData=cam.GetUniversalAdditionalCameraData(); camData.renderPostProcessing=!debug.Contains("nopost"); camData.antialiasing=AntialiasingMode.SubpixelMorphologicalAntiAliasing;
         cam.gameObject.AddComponent<AudioListener>();
         // Headlight: a directional fill riding on the camera, tilted off its axis so cube faces still grade, masked off the
         // planet layer so the terminator stays. Dimmer than the sun, so URP keeps the sun as the main light.
         var head=new GameObject("Headlight").AddComponent<Light>(); head.transform.SetParent(cam.transform,false); head.transform.localRotation=Quaternion.Euler(-28,22,0);
-        head.type=LightType.Directional; head.intensity=1.4f; head.color=new Color(.85f,.92f,1f); head.cullingMask=~(1<<PlanetLayer);
+        head.type=LightType.Directional; head.intensity=debug.Contains("nohead")?0:1.4f; head.color=new Color(.85f,.92f,1f); head.cullingMask=~(1<<PlanetLayer);
     }
     // Top-down, rigid: the camera sits above the head looking straight down the normal, no lag, no shake, so the ship is
     // pinned to the screen centre and only the world moves. Screen-up is a tangent vector parallel-transported along the

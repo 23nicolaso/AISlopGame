@@ -58,6 +58,10 @@ public partial class OrbitSnake : MonoBehaviour
     // -orbit-screenshot=<png> stages a train and turns for 3 s; -orbit-startshot=<png> captures the untouched start
     // screen at 3 s, the same frame a browser shows before the first key, so platforms can be compared pixel for pixel.
     string screenshotPath, startShotPath; bool shotTaken;
+    // Debug switches from the page URL on WebGL (?stage&nopost&nobloom&notone&noclouds&nospec&nohead): the same build can
+    // be bisected in a browser without a rebuild. `stage` runs the -orbit-screenshot staging without capturing.
+    public readonly System.Collections.Generic.HashSet<string> debug=new System.Collections.Generic.HashSet<string>();
+    bool Staged => screenshotPath!=null||debug.Contains("stage");
 
     public static float ShellRadius(int level) => PlanetRadius+ShellAltitude[Mathf.Clamp(level,0,ShellAltitude.Length-1)];
     public float CatchAngleNow => skills[(int)Skill.Magnet]?MagnetCatchAngle:CatchAngle;
@@ -79,6 +83,7 @@ public partial class OrbitSnake : MonoBehaviour
         I=this; Application.runInBackground=true;
         foreach(var arg in System.Environment.GetCommandLineArgs()){ if(arg.StartsWith("-orbit-screenshot="))screenshotPath=arg.Substring(18); if(arg.StartsWith("-orbit-startshot="))startShotPath=arg.Substring(17); }
         best=PlayerPrefs.GetInt("orbit.best",0);
+        { string u=Application.absoluteURL??""; int qi=u.IndexOf('?'); if(qi>=0)foreach(var kv in u.Substring(qi+1).Split('&','#')){ var k=kv.Split('=')[0].Trim(); if(k.Length>0)debug.Add(k); } }
         foreach(var c in FindObjectsByType<Camera>())c.enabled=false;
         foreach(var l in FindObjectsByType<Light>())l.enabled=false;
         foreach(var a in FindObjectsByType<AudioListener>())a.enabled=false;
@@ -261,13 +266,13 @@ public partial class OrbitSnake : MonoBehaviour
             if(shotTaken&&Time.realtimeSinceStartup>4.5f)Application.Quit();
             return;
         }
-        if(screenshotPath!=null)
+        if(Staged)
         {
             started=true; slowUntil=-1;
             if(ship.segments.Count==0&&elapsed<.1f){ for(int i=0;i<5;i++)ship.AddSegment(); skills[(int)Skill.Magnet]=true; skills[(int)Skill.Armour]=true; armour=1; OfferSkills(); }
-            ship.turn=Mathf.Sin(elapsed*1.5f);
-            if(!shotTaken&&elapsed>3){ ScreenCapture.CaptureScreenshot(screenshotPath); shotTaken=true; Debug.Log("[SHOT] HUD capture -> "+screenshotPath); }
-            if(shotTaken&&elapsed>4.5f)Application.Quit();
+            ship.turn=elapsed<3?Mathf.Sin(elapsed*1.5f):0; // after the capture moment the staged ship flies straight, so a browser frame stays comparable
+            if(screenshotPath!=null&&!shotTaken&&elapsed>3){ ScreenCapture.CaptureScreenshot(screenshotPath); shotTaken=true; Debug.Log("[SHOT] HUD capture -> "+screenshotPath); }
+            if(screenshotPath!=null&&shotTaken&&elapsed>4.5f)Application.Quit();
             return;
         }
         var k=Keyboard.current; var gp=Gamepad.current; if(k==null&&gp==null)return;
