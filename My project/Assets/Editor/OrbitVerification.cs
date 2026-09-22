@@ -146,7 +146,7 @@ public static class OrbitVerification
             // 23. Audio is synthesised: five shell loops of exactly eight bars at their tempo, a tension loop, nine effects, and
             // consecutive catches step the catch note up the pentatonic scale.
             for(int i=0;i<5;i++){ var lp=g.LoopClip(i); float bpm=100+Mathf.Min(i,3)*6; int expect=(int)(60f/bpm*22050)*4*8; Check(lp&&lp.samples==expect,"loop "+i+" is eight bars at "+bpm+" bpm ("+(lp?lp.samples:0)+" vs "+expect+")"); }
-            Check(g.TensionClip&&g.FxCount==9,"tension loop and nine effects exist");
+            Check(g.TensionClip&&g.FxCount==10,"tension loop and ten effects exist");
             g.Restart(1); g.Ping(1); float p1=g.CatchPitch; g.Ping(1); float p2=g.CatchPitch; g.Ping(1); float p3=g.CatchPitch;
             Check(Mathf.Approximately(p1,1)&&Mathf.Abs(p2-Mathf.Pow(2,3/12f))<1e-3f&&Mathf.Abs(p3-Mathf.Pow(2,5/12f))<1e-3f,"catch chain steps the pitch up the scale ("+p1.ToString("F3")+", "+p2.ToString("F3")+", "+p3.ToString("F3")+")");
 
@@ -156,11 +156,54 @@ public static class OrbitVerification
             g.Restart(1); g.score=30; g.End(false,"test"); Check(g.best==120&&!g.newBest,"a lower score leaves the best alone");
             PlayerPrefs.SetInt("orbit.best",savedBest); g.best=savedBest;
 
-            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism, skill offer and pick, magnet, armour, whip, brake, phase, compound, wordless HUD, Kessler clock, wreckage persistence, start gate, synthesised music and catch chain, best score";
+            // 25. Forgiving contact: a head-on piece passing 6 u to the side is a near miss (points, no strike), the same
+            // offset on a matched heading is still a catch, 3.5 u head-on is a strike, and a near miss pays once.
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); Fill(s,3); Beside(g,25,6,-s.tangent,0);
+            for(int i=0;i<60;i++)g.Step(Dt); Check(g.strikes==0&&g.nearMisses==1&&g.score==OrbitSnake.NearMissScore&&s.segments.Count==3,"a head-on piece 6 u to the side is a near miss, not a strike (strikes "+g.strikes+", near misses "+g.nearMisses+", score "+g.score+")");
+            for(int i=0;i<100;i++)g.Step(Dt); Check(g.nearMisses==1,"a near miss pays once per piece ("+g.nearMisses+")");
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); Beside(g,25,6,s.tangent,0);
+            for(int i=0;i<60;i++)g.Step(Dt); Check(g.caught==1&&g.strikes==0,"a matched piece 6 u to the side is still a catch (bonus space)");
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); Fill(s,3); Beside(g,25,3.5f,-s.tangent,0);
+            for(int i=0;i<60;i++)g.Step(Dt); Check(g.strikes==1&&g.nearMisses==0&&s.segments.Count==1,"a head-on piece 3.5 u to the side is a strike (strikes "+g.strikes+")");
+
+            // 26. Peril: struck down to nothing flags peril and holds the Kessler clock; a catch clears both.
+            g.Restart(2); s=g.ship; s.turn=0; Quiet(g); Fill(s,1); Ahead(g,30,-s.tangent,40);
+            for(int i=0;i<60;i++)g.Step(Dt); Check(g.strikes==1&&s.segments.Count==0&&!g.ended&&g.peril,"a strike that empties the train sets peril");
+            g.shellTime=OrbitSnake.KesslerStart+5; g.lastKessler=0; for(int i=0;i<10;i++)g.Step(Dt); Check(g.kesslerSpawned==0,"the Kessler clock holds while in peril");
+            s.grace=0; Ahead(g,20,s.tangent,40); for(int i=0;i<100&&g.caught==0;i++)g.Step(Dt); Check(g.caught==1&&!g.peril,"a catch clears peril");
+            for(int i=0;i<5;i++)g.Step(Dt); Check(g.kesslerSpawned>=1,"the Kessler clock resumes after peril");
+
+            // 27. Eased climb: after an eject the radius rises monotonically, never overshoots, starts slowly and settles on
+            // the new shell within LiftTime.
+            g.Restart(6); s=g.ship; Fill(s,OrbitSnake.EjectQuota[0]); g.Eject(); float r0=s.radius, r1=OrbitSnake.ShellRadius(1), last=r0; g.Step(Dt); float first=s.radius-r0;
+            Check(first>=0&&first<.05f,"the climb starts slowly (first step "+first.ToString("F4")+" u)");
+            for(int i=0;i<Mathf.CeilToInt(OrbitShip.LiftTime/Dt)+2;i++){ g.Step(Dt); Check(s.radius>=last-1e-4f&&s.radius<=r1+1e-3f,"the climb is monotonic and never overshoots"); last=s.radius; }
+            Check(Mathf.Abs(s.radius-r1)<1e-3f,"the climb settles on the new shell within LiftTime ("+s.radius.ToString("F3")+" vs "+r1+")");
+
+            // 28. The world keeps turning after the end: junk orbits on and the death embers burn out under Advance.
+            g.Restart(2); s=g.ship; g.End(false,"test"); Check(g.falling.Count>0,"death scatters embers"); float ph=g.junk[0].phase;
+            for(int i=0;i<150;i++)g.Advance(Dt); Check(g.falling.Count==0&&g.junk[0].phase!=ph&&g.ended,"after the end the embers finish and junk still moves");
+
+            // 29. Engine and heartbeat: two one-second loops, ten effects, and the engine pitch rises with the stick.
+            Check(g.FxCount==10&&g.EngineClip&&g.EngineClip.samples==22050&&g.HeartClip&&g.HeartClip.samples==22050,"engine and heartbeat loops exist beside ten effects");
+            g.Restart(1); g.ship.turn=1; for(int i=0;i<80;i++)g.TickAudio(.05f); Check(g.EnginePitch>1.18f,"the engine pitch rises with the stick ("+g.EnginePitch.ToString("F3")+")");
+
+            // 30. The score display chases the score and settles; a popup lives for a second.
+            g.Restart(1); g.score=200; g.TickHud(.02f); Check(g.shownScore>0&&g.shownScore<200&&g.scorePop>0,"the shown score lags the score and swells ("+g.shownScore.ToString("F1")+")");
+            for(int i=0;i<150;i++)g.TickHud(.02f); Check(Mathf.Approximately(g.shownScore,200),"the shown score settles on the score");
+            g.Popup(g.ship.Position,10,Color.white,20); Check(g.pops.Count==1,"a popup is queued"); for(int i=0;i<60;i++)g.TickHud(.02f); Check(g.pops.Count==0,"a popup is gone after a second");
+
+            return "ORBIT VERIFICATION PASS: shell walk, great/small circles, junk rails, catch, strike, zero-segment death, train spacing, self-bite, eject/lift/seed, pause, determinism, skill offer and pick, magnet, armour, whip, brake, phase, compound, wordless HUD, Kessler clock, wreckage persistence, start gate, synthesised music and catch chain, best score, forgiving contact and near miss, peril and its rubber band, eased climb, world after the end, engine and heartbeat, score tween and popups";
         }
         finally { OrbitSnake.Persist=false; g.Restart(7); OrbitSnake.Persist=wasPersist; if(string.IsNullOrEmpty(savedWreck))PlayerPrefs.DeleteKey(OrbitSnake.WreckKey); else PlayerPrefs.SetString(OrbitSnake.WreckKey,savedWreck); g.paused=wasPaused; }
     }
 
+    // Junk `ahead` units in front and `side` units across the heading (rotated about the local tangent), moving along `dir`.
+    static OrbitJunk Beside(OrbitSnake g,float ahead,float side,Vector3 dir,float speed)
+    {
+        var s=g.ship; float R=OrbitSnake.ShellRadius(g.level); var q=Quaternion.AngleAxis(ahead/R*Mathf.Rad2Deg,Vector3.Cross(s.normal,s.tangent)); Vector3 n=q*s.normal, t=q*s.tangent;
+        n=Quaternion.AngleAxis(side/R*Mathf.Rad2Deg,t)*n; var j=g.SpawnJunkAt(g.level,n,q*dir,speed,false); j.age=2; return j;
+    }
     static void Quiet(OrbitSnake g){ foreach(var other in g.junk)other.age=-100; }
     static void Fill(OrbitShip s,int n){ for(int i=0;i<n;i++)s.AddSegment(); }
     static int Count(string text,string needle){ int c=0,i=0; while((i=text.IndexOf(needle,i,System.StringComparison.Ordinal))>=0){c++;i+=needle.Length;} return c; }

@@ -7,6 +7,12 @@ public class OrbitShip : MonoBehaviour
 {
     public Vector3 normal, tangent; public float radius, targetRadius, turn, grace, shake, tailFlash; public bool dead, brake;
     public float dashTimer, dashSide;
+    // A climb is an eased slide between shells (cubic in-out over LiftTime), not a linear ramp: slow off the old shell,
+    // fast through the gap, settling onto the new one. liftT is 1 when parked.
+    public const float LiftTime=1.1f; public float liftT=1, liftFrom;
+    // Visual state only, never read by the rules: the hull's bank into a turn, its squash on an impact, and each
+    // segment's bank, which follows the one ahead a beat late so a turn ripples down the train.
+    public float bank; public Vector3 squash=Vector3.one; public readonly List<float> segBank=new();
     public readonly List<Transform> segments=new();
     readonly List<Vector3> trail=new(), trailDir=new(); readonly List<float> trailLen=new();
     public Vector3 Position => normal*radius;
@@ -14,8 +20,8 @@ public class OrbitShip : MonoBehaviour
     public Vector3 Right => Vector3.Cross(normal,tangent);
     public void Init(Vector3 n,Vector3 t,float r)
     {
-        normal=n.normalized; tangent=(t-normal*Vector3.Dot(t,normal)).normalized; radius=targetRadius=r; dead=false; grace=0; turn=0; shake=0; brake=false; dashTimer=0; tailFlash=0;
-        foreach(var s in segments)OrbitSnake.Kill(s.gameObject); segments.Clear();
+        normal=n.normalized; tangent=(t-normal*Vector3.Dot(t,normal)).normalized; radius=targetRadius=r; liftT=1; dead=false; grace=0; turn=0; shake=0; brake=false; dashTimer=0; tailFlash=0; bank=0; squash=Vector3.one;
+        foreach(var s in segments)OrbitSnake.Kill(s.gameObject); segments.Clear(); segBank.Clear();
         trail.Clear(); trailDir.Clear(); trailLen.Clear();
         // Prime the trail straight behind the head so a fresh tail has somewhere to sit.
         for(int i=OrbitSnake.MaxSegments+1;i>=0;i--){ float back=i*OrbitSnake.SegmentSpacing/radius; Vector3 p=Quaternion.AngleAxis(-back*Mathf.Rad2Deg,Vector3.Cross(normal,tangent))*normal; trail.Add(p); trailDir.Add(Quaternion.AngleAxis(-back*Mathf.Rad2Deg,Vector3.Cross(normal,tangent))*tangent); trailLen.Add((OrbitSnake.MaxSegments+1-i)*OrbitSnake.SegmentSpacing); }
@@ -32,7 +38,7 @@ public class OrbitShip : MonoBehaviour
         // Phase hop: the normal slides sideways along Right over DashTime, heading untouched.
         if(dashTimer>0){ float a=dashSide*OrbitSnake.DashDistance/radius*Mathf.Min(dt,dashTimer)/OrbitSnake.DashTime; Vector3 right=Right; normal=(normal*Mathf.Cos(a)+right*Mathf.Sin(a)).normalized; dashTimer-=dt; }
         tangent=(tangent-normal*Vector3.Dot(tangent,normal)).normalized;
-        radius=Mathf.MoveTowards(radius,targetRadius,dt*60);
+        if(liftT<1){ liftT=Mathf.Min(1,liftT+dt/LiftTime); float k=liftT<.5f?4*liftT*liftT*liftT:1-Mathf.Pow(-2*liftT+2,3)/2; radius=Mathf.Lerp(liftFrom,targetRadius,k); }
         float len=trailLen[trailLen.Count-1]+(normal-trail[trail.Count-1]).magnitude*radius; trail.Add(normal); trailDir.Add(tangent); trailLen.Add(len);
         float keep=(OrbitSnake.MaxSegments+2)*OrbitSnake.SegmentSpacing; while(trailLen.Count>2&&len-trailLen[0]>keep){trail.RemoveAt(0);trailDir.RemoveAt(0);trailLen.RemoveAt(0);}
         shake=Mathf.Max(0,shake-dt*2); tailFlash=Mathf.Max(0,tailFlash-dt);
@@ -55,10 +61,10 @@ public class OrbitShip : MonoBehaviour
         for(int i=0;i<segments.Count;i++){ var n=TrailNormal((i+1)*OrbitSnake.SegmentSpacing,out var d); segments[i].position=n*radius; segments[i].rotation=Quaternion.LookRotation(d,n); }
     }
 
-    public void AddSegment(){ segments.Add(OrbitSnake.I.BuildSegmentArt(this,segments.Count)); Place(); }
-    public void RemoveLast(){ if(segments.Count==0)return; var s=segments[segments.Count-1]; segments.RemoveAt(segments.Count-1); OrbitSnake.Kill(s.gameObject); }
+    public void AddSegment(){ segBank.Add(segments.Count>0?segBank[segments.Count-1]:bank); segments.Add(OrbitSnake.I.BuildSegmentArt(this,segments.Count)); Place(); }
+    public void RemoveLast(){ if(segments.Count==0)return; var s=segments[segments.Count-1]; segments.RemoveAt(segments.Count-1); segBank.RemoveAt(segBank.Count-1); OrbitSnake.Kill(s.gameObject); }
     public void Shed(int n){ for(int i=0;i<n;i++)RemoveLast(); }
-    public void Lift(float r){ targetRadius=r; }
+    public void Lift(float r){ liftFrom=radius; targetRadius=r; liftT=0; }
 
     // The head touching any segment past the third severs the tail there. Each loose segment becomes junk on the great
     // circle the head was drawing when it laid it, moving the way the snake was moving, so the wreck comes round again.
@@ -81,6 +87,9 @@ public class OrbitShip : MonoBehaviour
 public class OrbitJunk : MonoBehaviour
 {
     public int shell; public Vector3 axis,u,w; public float phase,rate,age; public bool wreck,shot; public float spin; public Renderer body; public Renderer[] tint;
+    // Near-miss bookkeeping: the head's distance last step while inside the near-miss band (-1 outside it), and whether
+    // this piece has already paid out, so one pass is one near miss.
+    public float prevDist=-1; public bool nearMissed;
     public void Init(int s,Vector3 a,float p,float r,bool isWreck)
     {
         shell=s; axis=a.normalized; phase=p; rate=r; wreck=isWreck; age=0; spin=(p*57)%360;

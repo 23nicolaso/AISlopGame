@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Orbit Snake WebGL release build, the same shape as unity-flappybird/scripts/build-webgl.sh:
-#   1. the 24 deterministic rule checks (OrbitHeadlessRunner, play mode, exit 0 required)
+#   1. the 30 deterministic rule checks (OrbitHeadlessRunner, play mode, exit 0 required)
 #   2. the WebGL player (RiftBuild.OrbitWebGL: edit-mode checks + build, prints BUILD_AND_TESTS_PASSED)
 #   3. the bundle validator (scripts/check-webgl.mjs: itch.io limits, relative URLs, responsive canvas)
 #   4. the render check (scripts/check-webgl-render.mjs: headless Chrome draws the start screen, pixels are inspected)

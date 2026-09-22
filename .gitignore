@@ -70,3 +70,6 @@ docs/screenshots/
 
 # Burst intermediate emitted by the WebGL build
 My project/Data/
+
+# Unity performance-test package writes these during a player build
+My project/Assets/Resources/PerformanceTestRun*

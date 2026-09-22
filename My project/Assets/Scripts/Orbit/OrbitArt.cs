@@ -13,7 +13,11 @@ public partial class OrbitSnake
     const int PlanetLayer=3;
     static readonly Quaternion PlanetTilt=Quaternion.Euler(90,0,0);
     Vector3 camPos, camUp; UniversalAdditionalCameraData camData;
-    ParticleSystem sparks; Transform cloudLayer;
+    ParticleSystem sparks, puffs, confetti; Transform cloudLayer; TrailRenderer[] shipTrails;
+    // Camera juice, all translation and lens, never rotation (the chase camera's roll was what made the user queasy):
+    // camShake is a decaying amplitude that jitters the eye in the tangent plane, fovKick is a lens punch that eases out,
+    // camH is the height easing toward the shell's height instead of jumping ten units on a climb.
+    public float camShake, fovKick; float fovNow=62, camH=CamHeight;
     public Vector3 sunDir=new Vector3(-.55f,.6f,-.58f).normalized;
 
     Material Mat(Color c,bool unlit){ var m=new Material(Shader.Find(unlit?"Universal Render Pipeline/Unlit":"Universal Render Pipeline/Lit")); m.SetColor("_BaseColor",c); m.color=c; if(!unlit){m.SetFloat("_Metallic",.25f);m.SetFloat("_Smoothness",.4f);} owned.Add(m); return m; }
@@ -72,11 +76,20 @@ public partial class OrbitSnake
         if(debug.Contains("nobloom"))bloom.active=false; if(debug.Contains("notone"))tone.active=false; if(debug.Contains("noclouds"))clouds.SetActive(false);
         if(debug.Contains("nospec")){ planetMat.SetFloat("_Smoothness",0); cloudMat.SetFloat("_Smoothness",0); }
         if(debug.Contains("nocloudspec")){ cloudMat.SetFloat("_Smoothness",0); cloudMat.SetFloat("_Metallic",0); }
-        // Sparks: one shared burst system for catches and strikes, coloured per burst.
-        var sp=new GameObject("Sparks"); sp.transform.SetParent(world,false); sparks=sp.AddComponent<ParticleSystem>(); var main=sparks.main; main.playOnAwake=false; main.loop=false; main.startLifetime=.5f; main.startSpeed=22; main.startSize=1.1f; main.gravityModifier=0; main.simulationSpace=ParticleSystemSimulationSpace.World; main.maxParticles=400;
-        var em=sparks.emission; em.enabled=false; var shp=sparks.shape; shp.shapeType=ParticleSystemShapeType.Sphere; shp.radius=.5f; var col=sparks.colorOverLifetime; col.enabled=true; var grad=new Gradient(); grad.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(Color.white,1)},new[]{new GradientAlphaKey(1,0),new GradientAlphaKey(0,1)}); col.color=grad;
-        var pr=sp.GetComponent<ParticleSystemRenderer>(); pr.sharedMaterial=sparkMat; pr.renderMode=ParticleSystemRenderMode.Stretch; pr.lengthScale=3;
+        // Sparks: one shared burst system for catches and strikes, coloured per burst. Puffs: slow, short thruster smoke
+        // off the fins. Confetti: tumbling flat squares in six colours for the escape, because winning gets confetti.
+        sparks=Particles("Sparks",.5f,22,1.1f,400,true); puffs=Particles("Puffs",.3f,7,.7f,200,false);
+        confetti=Particles("Confetti",2.2f,14,1.5f,900,false); { var cm=confetti.main; var g=new Gradient(); g.SetKeys(new[]{new GradientColorKey(new Color(1.3f,.3f,.4f),0),new GradientColorKey(new Color(1.3f,1.1f,.3f),.2f),new GradientColorKey(new Color(.3f,1.3f,.5f),.4f),new GradientColorKey(new Color(.3f,.8f,1.4f),.6f),new GradientColorKey(new Color(1.2f,.4f,1.3f),.8f),new GradientColorKey(Color.white,1)},new[]{new GradientAlphaKey(1,0),new GradientAlphaKey(1,1)}); cm.startColor=new ParticleSystem.MinMaxGradient(g){mode=ParticleSystemGradientMode.RandomColor}; cm.startSize=new ParticleSystem.MinMaxCurve(.9f,2.2f); cm.startRotation=new ParticleSystem.MinMaxCurve(0,Mathf.PI*2);
+            var rot=confetti.rotationOverLifetime; rot.enabled=true; rot.z=new ParticleSystem.MinMaxCurve(-6,6); var pr=confetti.GetComponent<ParticleSystemRenderer>(); pr.renderMode=ParticleSystemRenderMode.Billboard; var lim=confetti.limitVelocityOverLifetime; lim.enabled=true; lim.dampen=.6f; lim.limit=3; }
     }
+    ParticleSystem Particles(string name,float life,float speed,float size,int max,bool stretch)
+    {
+        var go=new GameObject(name); go.transform.SetParent(world,false); var ps=go.AddComponent<ParticleSystem>(); var main=ps.main; main.playOnAwake=false; main.loop=false; main.startLifetime=life; main.startSpeed=speed; main.startSize=size; main.gravityModifier=0; main.simulationSpace=ParticleSystemSimulationSpace.World; main.maxParticles=max;
+        var em=ps.emission; em.enabled=false; var shp=ps.shape; shp.shapeType=ParticleSystemShapeType.Sphere; shp.radius=.5f; var col=ps.colorOverLifetime; col.enabled=true; var grad=new Gradient(); grad.SetKeys(new[]{new GradientColorKey(Color.white,0),new GradientColorKey(Color.white,1)},new[]{new GradientAlphaKey(1,0),new GradientAlphaKey(1,.6f),new GradientAlphaKey(0,1)}); col.color=grad;
+        var pr=go.GetComponent<ParticleSystemRenderer>(); pr.sharedMaterial=sparkMat; if(stretch){ pr.renderMode=ParticleSystemRenderMode.Stretch; pr.lengthScale=3; } return ps;
+    }
+    public void Confetti(Vector3 at,int count){ if(!confetti)return; confetti.transform.position=at; confetti.Emit(count); }
+    void Puff(Vector3 at,Vector3 dir){ if(!puffs)return; var main=puffs.main; main.startColor=new Color(.5f,.85f,1.1f,.8f); puffs.transform.position=at; var ep=new ParticleSystem.EmitParams{position=at,velocity=dir*7+Random.insideUnitSphere*1.5f}; puffs.Emit(ep,1); }
 
     // Surface map: ocean / shelf / land / highland / ice by two-octave noise, latitude ice caps, night-side unaffected (the
     // material is lit). 1024x512, generated once.
@@ -128,6 +141,7 @@ public partial class OrbitSnake
             var plume=Shape("Exhaust",s.transform,PrimitiveType.Sphere,new Vector3(side*1.1f,0,-3.4f),new Vector3(.5f,.5f,1.2f),exhaustMat);
             var trail=plume.AddComponent<TrailRenderer>(); trail.sharedMaterial=exhaustMat; trail.time=.22f; trail.startWidth=.9f; trail.endWidth=0; trail.minVertexDistance=.4f;
         }
+        shipTrails=s.GetComponentsInChildren<TrailRenderer>();
     }
     public Transform BuildSegmentArt(OrbitShip s,int index)
     {
@@ -165,7 +179,12 @@ public partial class OrbitSnake
     // Out of reach it is neutral metal, so the colour means "this one, now" rather than painting the whole sky red.
     public void TintJunk()
     {
-        foreach(var j in junk){ if(j.tint==null||j.shot)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:!near?junkNeutral:(Vector3.Angle(ship.tangent,j.Direction)<CatchAngleNow?junkCatch:junkStrike); if(j.body&&j.body.sharedMaterial!=m)foreach(var r in j.tint)if(r)r.sharedMaterial=m; }
+        foreach(var j in junk)
+        {
+            // New junk grows in over its first second with a little overshoot (it is not live until age 1 anyway).
+            if(j.age<1.1f)j.transform.localScale=Vector3.one*EaseOutBack(Mathf.Clamp01(j.age));
+            if(j.tint==null||j.shot)continue; bool near=j.shell==level&&(j.Position-ship.Position).magnitude<150; Material m=j.wreck?wreckMat:!near?junkNeutral:(Vector3.Angle(ship.tangent,j.Direction)<CatchAngleNow?junkCatch:junkStrike); if(j.body&&j.body.sharedMaterial!=m)foreach(var r in j.tint)if(r)r.sharedMaterial=m;
+        }
         if(cloudLayer)cloudLayer.Rotate(PlanetTilt*Vector3.up,Time.deltaTime*.4f,Space.World);
     }
 
@@ -187,13 +206,18 @@ public partial class OrbitSnake
     const float CamHeight=85f;
     float CamHeightNow => CamHeight+level*10;
     // Snap is only used after a restart or a staged jump, so it also clears the exhaust trails a teleport would smear.
-    public void SnapCamera(){ camUp=ship.tangent; ApplyCamera(); foreach(var t in ship.GetComponentsInChildren<TrailRenderer>())t.Clear(); }
-    void UpdateCamera(float dt){ ApplyCamera(); TintJunk(); }
-    void ApplyCamera()
+    public void SnapCamera(){ camUp=ship.tangent; camShake=0; fovKick=0; fovNow=62; camH=CamHeightNow; ApplyCamera(0); foreach(var t in ship.GetComponentsInChildren<TrailRenderer>())t.Clear(); }
+    void UpdateCamera(float dt){ ApplyCamera(dt); TintJunk(); }
+    void ApplyCamera(float dt)
     {
         camUp=(camUp-ship.normal*Vector3.Dot(camUp,ship.normal)).normalized; if(camUp.sqrMagnitude<.5f)camUp=ship.tangent;
         // Win: the camera climbs away for three seconds and the planet shrinks to a point. That is the whole victory screen.
-        float h=CamHeightNow*(won?1+Mathf.Min(endTimer,3)*3:1);
-        camPos=ship.Position+ship.normal*h; cam.transform.position=camPos; cam.transform.rotation=Quaternion.LookRotation(-ship.normal,camUp);
+        float h=CamHeightNow*(won?1+Mathf.Min(endTimer,3)*3:1); camH=dt>0?Mathf.Lerp(camH,h,1-Mathf.Exp(-dt*3)):h;
+        // Shake: noise in the tangent plane, up to 6 u at full amplitude, gone in a third of a second.
+        float ts=Time.unscaledTime; Vector3 off=camShake>0?(ship.Right*(Mathf.PerlinNoise(ts*23,.3f)-.5f)+ship.tangent*(Mathf.PerlinNoise(.7f,ts*29)-.5f))*camShake*6:Vector3.zero;
+        camPos=ship.Position+ship.normal*camH+off; cam.transform.position=camPos; cam.transform.rotation=Quaternion.LookRotation(-ship.normal,camUp);
+        // Lens: a touch wider in a hard turn, tighter under the brake, plus whatever kick an event left, easing out.
+        float fovTarget=62+5*Mathf.Abs(ship.turn)-(ship.brake?7:0)+fovKick; fovNow=dt>0?Mathf.Lerp(fovNow,fovTarget,1-Mathf.Exp(-dt*8)):fovTarget; cam.fieldOfView=fovNow;
+        fovKick=Mathf.Lerp(fovKick,0,1-Mathf.Exp(-dt*6)); camShake=Mathf.Max(0,camShake-dt*3);
     }
 }
